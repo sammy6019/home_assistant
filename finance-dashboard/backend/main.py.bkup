@@ -1,0 +1,317 @@
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, List
+import aiohttp
+import asyncio
+import os
+from datetime import datetime
+import json
+import httpx
+from functools import lru_cache
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Finance Dashboard API")
+
+# CORS Configuration (adjust origins for your VPN setup)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict to your VPN CIDR ranges in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# API Keys (use environment variables in production)
+ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "demo")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+# Models
+class AnalysisRequest(BaseModel):
+    symbol: str
+    type: str  # stock, crypto, etf, mutual_fund
+    timeframe: str = "daily"
+
+class AIInsight(BaseModel):
+    symbol: str
+    insight: str
+    confidence: float
+    timestamp: str
+
+class FinancialData(BaseModel):
+    symbol: str
+    price: float
+    change_percent: float
+    volume: Optional[int] = None
+    timestamp: str
+    data_type: str
+
+# Cache for API responses
+data_cache = {}
+CACHE_DURATION = 3600  # 1 hour
+
+def is_cache_valid(symbol: str) -> bool:
+    if symbol not in data_cache:
+        return False
+    return (datetime.now() - data_cache[symbol]["timestamp"]).seconds < CACHE_DURATION
+
+# Financial Data Fetching Functions
+async def fetch_stock_data(symbol: str) -> Dict:
+    """Fetch stock data from Alpha Vantage"""
+    if is_cache_valid(f"stock_{symbol}"):
+        return data_cache[f"stock_{symbol}"]["data"]
+    
+    try:
+        url = f"https://www.alphavantage.co/query"
+        params = {
+            "function": "GLOBAL_QUOTE",
+            "symbol": symbol,
+            "apikey": ALPHA_VANTAGE_KEY
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            data = response.json()
+            
+            if "Global Quote" in data and data["Global Quote"]:
+                quote = data["Global Quote"]
+                result = {
+                    "symbol": symbol,
+                    "price": float(quote.get("05. price", 0)),
+                    "change_percent": float(quote.get("10. change percent", "0").rstrip("%")),
+                    "volume": int(quote.get("06. volume", 0)),
+                    "timestamp": datetime.now().isoformat(),
+                    "data_type": "stock"
+                }
+                
+                # Cache the result
+                data_cache[f"stock_{symbol}"] = {
+                    "data": result,
+                    "timestamp": datetime.now()
+                }
+                
+                return result
+            else:
+                raise ValueError(f"No data found for symbol {symbol}")
+    except Exception as e:
+        logger.error(f"Error fetching stock data: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch stock data: {str(e)}")
+
+async def fetch_crypto_data(crypto: str) -> Dict:
+    """Fetch crypto data from CoinGecko (free, no API key needed)"""
+    if is_cache_valid(f"crypto_{crypto}"):
+        return data_cache[f"crypto_{crypto}"]["data"]
+    
+    try:
+        url = f"https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": crypto.lower(),
+            "vs_currencies": "usd",
+            "include_24hr_change": "true"
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            data = response.json()
+            
+            if crypto.lower() in data:
+                price_data = data[crypto.lower()]
+                result = {
+                    "symbol": crypto.upper(),
+                    "price": price_data.get("usd", 0),
+                    "change_percent": price_data.get("usd_24h_change", 0),
+                    "timestamp": datetime.now().isoformat(),
+                    "data_type": "crypto"
+                }
+                
+                # Cache the result
+                data_cache[f"crypto_{crypto}"] = {
+                    "data": result,
+                    "timestamp": datetime.now()
+                }
+                
+                return result
+            else:
+                raise ValueError(f"No data found for crypto {crypto}")
+    except Exception as e:
+        logger.error(f"Error fetching crypto data: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch crypto data: {str(e)}")
+
+# Ollama AI Integration
+async def get_ollama_insight(symbol: str, financial_data: Dict, data_type: str) -> AIInsight:
+    """Get AI-powered insights from Ollama"""
+    try:
+        prompt = f"""
+        Analyze this {data_type} data and provide a brief investment insight:
+        
+        Symbol: {symbol}
+        Current Price: ${financial_data['price']}
+        24h Change: {financial_data['change_percent']}%
+        Type: {data_type}
+        
+        Provide a concise, actionable insight (2-3 sentences) about this asset. 
+        Be conservative and mention risks.
+        """
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{OLLAMA_HOST}/api/generate",
+                json={
+                    "model": "neural-chat",  # Default model, adjust as needed
+                    "prompt": prompt,
+                    "stream": False,
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                insight_text = result.get("response", "").strip()
+                
+                return AIInsight(
+                    symbol=symbol,
+                    insight=insight_text,
+                    confidence=0.75,  # Ollama confidence estimate
+                    timestamp=datetime.now().isoformat()
+                )
+            else:
+                logger.warning(f"Ollama API error: {response.status_code}")
+                return AIInsight(
+                    symbol=symbol,
+                    insight="AI service temporarily unavailable",
+                    confidence=0.0,
+                    timestamp=datetime.now().isoformat()
+                )
+    except Exception as e:
+        logger.error(f"Error getting Ollama insight: {e}")
+        return AIInsight(
+            symbol=symbol,
+            insight=f"Error generating insight: {str(e)}",
+            confidence=0.0,
+            timestamp=datetime.now().isoformat()
+        )
+
+# API Endpoints
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "ollama_available": await check_ollama_health()
+    }
+
+async def check_ollama_health():
+    """Check if Ollama is available"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{OLLAMA_HOST}/api/tags")
+            return response.status_code == 200
+    except:
+        return False
+
+@app.get("/api/stock/{symbol}")
+async def get_stock(symbol: str):
+    """Get stock data and AI insights"""
+    stock_data = await fetch_stock_data(symbol)
+    insight = await get_ollama_insight(symbol, stock_data, "stock")
+    
+    return {
+        "data": stock_data,
+        "insight": insight
+    }
+
+@app.get("/api/crypto/{crypto}")
+async def get_crypto(crypto: str):
+    """Get crypto data and AI insights"""
+    crypto_data = await fetch_crypto_data(crypto)
+    insight = await get_ollama_insight(crypto, crypto_data, "cryptocurrency")
+    
+    return {
+        "data": crypto_data,
+        "insight": insight
+    }
+
+@app.post("/api/analyze")
+async def analyze_asset(request: AnalysisRequest):
+    """Analyze any financial asset with AI"""
+    try:
+        if request.type == "stock":
+            data = await fetch_stock_data(request.symbol)
+        elif request.type == "crypto":
+            data = await fetch_crypto_data(request.symbol)
+        else:
+            raise ValueError(f"Unsupported asset type: {request.type}")
+        
+        insight = await get_ollama_insight(request.symbol, data, request.type)
+        
+        return {
+            "symbol": request.symbol,
+            "type": request.type,
+            "data": data,
+            "insight": insight
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/portfolio/summary")
+async def get_portfolio_summary(symbols: str = ""):
+    """Get summary of multiple assets (comma-separated symbols)"""
+    if not symbols:
+        return {"error": "No symbols provided"}
+    
+    symbol_list = [s.strip().upper() for s in symbols.split(",")]
+    results = []
+    
+    for symbol in symbol_list[:10]:  # Limit to 10 to avoid rate limiting
+        try:
+            # Try as stock first
+            data = await fetch_stock_data(symbol)
+            insight = await get_ollama_insight(symbol, data, "stock")
+            results.append({
+                "symbol": symbol,
+                "data": data,
+                "insight": insight
+            })
+        except:
+            try:
+                # Try as crypto
+                data = await fetch_crypto_data(symbol)
+                insight = await get_ollama_insight(symbol, data, "crypto")
+                results.append({
+                    "symbol": symbol,
+                    "data": data,
+                    "insight": insight
+                })
+            except Exception as e:
+                logger.error(f"Could not fetch data for {symbol}: {e}")
+                results.append({
+                    "symbol": symbol,
+                    "error": "Could not fetch data"
+                })
+    
+    return {
+        "count": len(results),
+        "assets": results,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/ollama/models")
+async def list_ollama_models():
+    """List available Ollama models"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{OLLAMA_HOST}/api/tags")
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": "Could not reach Ollama service"}
+    except Exception as e:
+        return {"error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

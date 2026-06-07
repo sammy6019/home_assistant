@@ -1,0 +1,40 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+command_line:
+  - sensor:
+      name: "Disk Usage Percent"
+      command: "df / | tail -1 | awk '{print int($5)}'"
+      unit_of_measurement: "%"
+      scan_interval: 300
+
+  - sensor:
+      name: "Memory Usage Percent"
+      command: "free | grep Mem | awk '{printf(\"%.0f\", $3/$2 * 100)}'"
+      unit_of_measurement: "%"
+      scan_interval: 300
+
+  - sensor:
+      name: "Available Storage"
+      command: "df / | tail -1 | awk '{print int($4/1048576)}'"
+      unit_of_measurement: "GB"
+      scan_interval: 300
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.17.0.0/16
+    - 172.18.0.0/16
+    - 127.0.0.1
+    - ::1
+    - 192.168.1.227
+
+shell_command:
+  run_flood_monitor: "python3 /mnt/ssd/flood-monitor/flood_monitor.py"

@@ -1,0 +1,284 @@
+"""
+Metrics Calculator
+Calculates fundamental, technical, and composite scores for stocks and cryptos
+"""
+
+import logging
+from typing import Dict, List, Tuple
+import math
+
+logger = logging.getLogger(__name__)
+
+
+class MetricsCalculator:
+    """Calculate investment scores based on metrics"""
+    
+    def __init__(self, weights: Dict):
+        """
+        Args:
+            weights: Dict with 'growth', 'dividend', 'momentum' weights
+        """
+        self.weights = weights
+        self.normalize_weights()
+    
+    def normalize_weights(self):
+        """Ensure weights sum to 1.0"""
+        total = sum(self.weights.values())
+        if total != 0:
+            for key in self.weights:
+                self.weights[key] = self.weights[key] / total
+    
+    def score_growth(self, stock_data: Dict) -> float:
+        """
+        Score growth potential (0-100)
+        
+        Factors:
+        - Earnings growth rate
+        - Revenue growth
+        - Forward P/E vs trailing P/E
+        - Recent price momentum (30/90 day returns)
+        """
+        if 'error' in stock_data:
+            return 0
+        
+        score = 0
+        weight_count = 0
+        
+        # Earnings growth (0-40 points)
+        earnings_growth = stock_data.get('earnings_growth')
+        if earnings_growth:
+            # Normalize: 0% = 0 points, 30%+ = 40 points
+            eg_score = min(40, (earnings_growth * 100) / 0.75) if earnings_growth else 0
+            score += eg_score
+            weight_count += 1
+        
+        # Revenue growth (0-30 points)
+        revenue_growth = stock_data.get('revenue_growth')
+        if revenue_growth:
+            rg_score = min(30, (revenue_growth * 100) / 1.0) if revenue_growth else 0
+            score += rg_score
+            weight_count += 1
+        
+        # Price momentum - 30 day return (0-30 points)
+        return_30d = stock_data.get('return_30d', 0)
+        if return_30d is not None:
+            # 0% = 15 points, +20% = 30 points, -20% = 0 points
+            momentum_score = 15 + (return_30d / 2)
+            momentum_score = max(0, min(30, momentum_score))
+            score += momentum_score
+            weight_count += 1
+        
+        if weight_count == 0:
+            return 0
+        
+        return min(100, score / weight_count * 2)  # Scale to 100
+    
+    def score_dividend(self, stock_data: Dict) -> float:
+        """
+        Score dividend attractiveness (0-100)
+        
+        Factors:
+        - Dividend yield
+        - Dividend growth
+        - Payout ratio
+        """
+        if 'error' in stock_data:
+            return 0
+        
+        score = 0
+        weight_count = 0
+        
+        # Dividend yield (0-60 points)
+        div_yield = stock_data.get('dividend_yield')
+        if div_yield and div_yield > 0:
+            # 0% = 0 points, 3%+ = 60 points
+            div_score = min(60, (div_yield * 100) * 20)
+            score += div_score
+            weight_count += 1
+        else:
+            # No dividend = 0 points (but stock still valuable)
+            score += 0
+            weight_count += 1
+        
+        # Safety check - payout ratio (0-40 points)
+        # If we can calculate it, lower is better (more sustainable)
+        # For now, just add bonus if dividend exists
+        if div_yield and div_yield > 0:
+            score += 40  # Bonus for paying dividend
+            weight_count += 1
+        
+        if weight_count == 0:
+            return 0
+        
+        return min(100, score / weight_count)
+    
+    def score_momentum(self, stock_data: Dict) -> float:
+        """
+        Score technical momentum (0-100)
+        
+        Factors:
+        - 30-day return (immediate momentum)
+        - 90-day return (trend)
+        - Volume trends (from 24h change for cryptos)
+        """
+        if 'error' in stock_data:
+            return 0
+        
+        score = 0
+        weight_count = 0
+        
+        # 30-day momentum (0-50 points)
+        return_30d = stock_data.get('return_30d', 0)
+        if return_30d is not None:
+            # -20% = 0, 0% = 25, +20% = 50
+            momentum_30d = 25 + (return_30d / 2)
+            momentum_30d = max(0, min(50, momentum_30d))
+            score += momentum_30d
+            weight_count += 1
+        
+        # 90-day momentum (0-50 points) - longer term trend
+        return_90d = stock_data.get('return_90d', 0)
+        if return_90d is not None:
+            # -30% = 0, 0% = 25, +30% = 50
+            momentum_90d = 25 + (return_90d / 2.4)
+            momentum_90d = max(0, min(50, momentum_90d))
+            score += momentum_90d
+            weight_count += 1
+        
+        # 24h change (for cryptos) - immediate sentiment
+        return_24h = stock_data.get('return_24h')
+        if return_24h is not None:
+            # Small movements matter more for crypto
+            sentiment_24h = 50 + (return_24h * 2)
+            sentiment_24h = max(0, min(50, sentiment_24h))
+            score += sentiment_24h
+            weight_count += 1
+        
+        if weight_count == 0:
+            return 0
+        
+        return min(100, score / weight_count)
+    
+    def score_crypto_momentum(self, crypto_data: Dict) -> float:
+        """Score momentum specifically for cryptos"""
+        if 'error' in crypto_data:
+            return 0
+        
+        score = 0
+        weight_count = 0
+        
+        # 24h change (0-40 points)
+        return_24h = crypto_data.get('return_24h', 0)
+        if return_24h is not None:
+            sentiment_24h = 20 + (return_24h * 1.5)
+            sentiment_24h = max(0, min(40, sentiment_24h))
+            score += sentiment_24h
+            weight_count += 1
+        
+        # 7d change (0-30 points)
+        return_7d = crypto_data.get('return_7d', 0)
+        if return_7d is not None:
+            sentiment_7d = 15 + (return_7d / 2)
+            sentiment_7d = max(0, min(30, sentiment_7d))
+            score += sentiment_7d
+            weight_count += 1
+        
+        # 30d change (0-30 points)
+        return_30d = crypto_data.get('return_30d', 0)
+        if return_30d is not None:
+            trend_30d = 15 + (return_30d / 4)
+            trend_30d = max(0, min(30, trend_30d))
+            score += trend_30d
+            weight_count += 1
+        
+        if weight_count == 0:
+            return 0
+        
+        return min(100, score / weight_count)
+    
+    def calculate_stock_score(self, stock_data: Dict) -> Dict:
+        """Calculate composite score for a stock"""
+        if 'error' in stock_data:
+            return {
+                'symbol': stock_data.get('symbol'),
+                'error': stock_data.get('error'),
+                'score': 0
+            }
+        
+        growth_score = self.score_growth(stock_data)
+        dividend_score = self.score_dividend(stock_data)
+        momentum_score = self.score_momentum(stock_data)
+        
+        # Weighted composite
+        composite = (
+            growth_score * self.weights.get('growth', 0.4) +
+            dividend_score * self.weights.get('dividend', 0.2) +
+            momentum_score * self.weights.get('momentum', 0.4)
+        )
+        
+        return {
+            'symbol': stock_data.get('symbol'),
+            'price': stock_data.get('price'),
+            'sector': stock_data.get('sector'),
+            'score': round(composite, 2),
+            'scores': {
+                'growth': round(growth_score, 2),
+                'dividend': round(dividend_score, 2),
+                'momentum': round(momentum_score, 2)
+            },
+            'metrics': {
+                'return_30d': round(stock_data.get('return_30d', 0), 2),
+                'return_90d': round(stock_data.get('return_90d', 0), 2),
+                'pe_ratio': stock_data.get('pe_ratio'),
+                'dividend_yield': stock_data.get('dividend_yield'),
+                'earnings_growth': stock_data.get('earnings_growth')
+            }
+        }
+    
+    def calculate_crypto_score(self, crypto_data: Dict) -> Dict:
+        """Calculate composite score for crypto"""
+        if 'error' in crypto_data:
+            return {
+                'symbol': crypto_data.get('symbol'),
+                'error': crypto_data.get('error'),
+                'score': 0
+            }
+        
+        # For crypto: growth (momentum), market_health, momentum
+        growth_score = self.score_momentum(crypto_data)  # Crypto growth = momentum
+        market_health_score = 50  # Placeholder (could analyze market cap stability)
+        momentum_score = self.score_crypto_momentum(crypto_data)
+        
+        # Weighted composite for crypto
+        composite = (
+            growth_score * self.weights.get('growth', 0.4) +
+            market_health_score * self.weights.get('market_health', 0.2) +
+            momentum_score * self.weights.get('momentum', 0.4)
+        )
+        
+        return {
+            'symbol': crypto_data.get('symbol'),
+            'price': crypto_data.get('price'),
+            'type': 'crypto',
+            'score': round(composite, 2),
+            'scores': {
+                'momentum': round(momentum_score, 2),
+                'market_health': round(market_health_score, 2)
+            },
+            'metrics': {
+                'return_24h': round(crypto_data.get('return_24h', 0), 2),
+                'return_7d': round(crypto_data.get('return_7d', 0), 2),
+                'return_30d': round(crypto_data.get('return_30d', 0), 2),
+                'market_cap': crypto_data.get('market_cap')
+            }
+        }
+    
+    def rank_assets(self, all_scores: List[Dict], top_n: int = 10) -> List[Dict]:
+        """Rank assets by score and return top N"""
+        # Remove errors
+        valid_scores = [s for s in all_scores if 'score' in s and 'error' not in s]
+        
+        # Sort by score descending
+        ranked = sorted(valid_scores, key=lambda x: x['score'], reverse=True)
+        
+        return ranked[:top_n]

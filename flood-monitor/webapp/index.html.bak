@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ditch Flood Monitor — ollamapi.com</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e13;
+    --surface: #111720;
+    --surface2: #1a2130;
+    --border: #1e2d3d;
+    --teal: #00c8a0;
+    --teal-dim: #00c8a020;
+    --amber: #f5a623;
+    --red: #e8404a;
+    --red-dim: #e8404a20;
+    --amber-dim: #f5a62320;
+    --text: #e8edf2;
+    --text-dim: #6b7f94;
+    --text-mid: #a0b0c0;
+    --mono: 'DM Mono', monospace;
+    --display: 'Playfair Display', serif;
+    --body: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(10,14,19,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo-block {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    border: 1.5px solid var(--teal);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text h1 {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+
+  .logo-text p {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--teal);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--teal);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .btn-report {
+    background: var(--teal);
+    color: #0a0e13;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-report:hover {
+    background: #00e8b8;
+    transform: translateY(-1px);
+  }
+
+  .btn-scan {
+    background: transparent;
+    color: var(--amber);
+    border: 1.5px solid var(--amber);
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-scan:hover { background: var(--amber-dim); }
+  .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-scan.running {
+    color: var(--text-dim);
+    border-color: var(--border);
+    animation: pulse 1.5s infinite;
+  }
+
+  /* Toast */
+  .scan-toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-mid);
+    z-index: 300;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .scan-toast.visible { opacity: 1; }
+  .scan-toast.success { border-color: var(--teal); color: var(--teal); }
+  .scan-toast.error { border-color: var(--red); color: var(--red); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    padding: 32px 0;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .stat-card.teal::before { background: var(--teal); }
+  .stat-card.amber::before { background: var(--amber); }
+  .stat-card.red::before { background: var(--red); }
+  .stat-card.blue::before { background: #4a9eff; }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  .stat-value {
+    font-family: var(--display);
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-card.teal .stat-value { color: var(--teal); }
+  .stat-card.amber .stat-value { color: var(--amber); }
+  .stat-card.red .stat-value { color: var(--red); }
+  .stat-card.blue .stat-value { color: #4a9eff; }
+
+  .stat-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    padding-bottom: 48px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    display: inline-block;
+  }
+
+  /* Timeline */
+  .timeline {
+    padding: 8px 0;
+    max-height: 520px;
+    overflow-y: auto;
+  }
+
+  .timeline::-webkit-scrollbar { width: 4px; }
+  .timeline::-webkit-scrollbar-track { background: transparent; }
+  .timeline::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .event-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 16px;
+    align-items: start;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .event-item:hover { background: var(--surface2); }
+  .event-item:last-child { border-bottom: none; }
+  .event-item.selected { background: var(--surface2); border-left: 2px solid var(--teal); }
+
+  .event-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .event-time .date { color: var(--text-mid); font-size: 10px; }
+
+  .event-body {}
+
+  .event-level {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+
+  .level-none { background: #1a2130; color: var(--text-dim); }
+  .level-low { background: #1a2e1a; color: #4caf50; }
+  .level-medium { background: var(--amber-dim); color: var(--amber); }
+  .level-high { background: #2e1a1a; color: #ff6b6b; }
+  .level-critical { background: var(--red-dim); color: var(--red); }
+  .level-unknown { background: #1a2130; color: var(--text-dim); }
+
+  .event-analysis {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .event-alert {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--red);
+    white-space: nowrap;
+  }
+
+  /* Snapshot panel */
+  .snapshot-panel {}
+
+  .snapshot-viewer {
+    padding: 16px;
+  }
+
+  .snapshot-img-wrap {
+    background: #060a0e;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .snapshot-placeholder {
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-align: center;
+    padding: 32px;
+  }
+
+  /* Single snapshot */
+  .snapshot-single {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    display: block;
+  }
+
+  .snapshot-single:hover { border-color: var(--teal); }
+
+  /* Snapshot grid for multi-camera view */
+  .snapshot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 4px;
+    width: 100%;
+  }
+
+  .snapshot-grid-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .snapshot-grid-item.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .snapshot-grid-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  .snapshot-grid-img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #060a0e;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    display: block;
+  }
+
+  .snapshot-grid-img:hover { border-color: var(--teal); }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 400;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .lightbox.open { display: flex; }
+
+  .lightbox img {
+    max-width: 92vw;
+    max-height: 82vh;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .lightbox-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .lightbox-close {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+  }
+
+  .snapshot-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+  }
+
+  .meta-key {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .meta-val {
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  /* Analysis text */
+  .analysis-box {
+    margin: 16px;
+    padding: 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border-left: 2px solid var(--teal);
+  }
+
+  .analysis-box p {
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+
+  /* Chart */
+  .chart-area {
+    padding: 20px;
+  }
+
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 80px;
+    margin-bottom: 8px;
+  }
+
+  .chart-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .chart-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    transition: height 0.6s ease;
+    cursor: pointer;
+    min-height: 4px;
+  }
+
+  .chart-bar.none { background: var(--border); }
+  .chart-bar.low { background: #4caf50; }
+  .chart-bar.medium { background: var(--amber); }
+  .chart-bar.high { background: #ff6b6b; }
+  .chart-bar.critical { background: var(--red); }
+
+  .chart-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  /* Live feed section */
+  .live-section {
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 10px;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--red);
+    animation: pulse 1s infinite;
+  }
+
+  /* Report modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90%;
+    animation: fadeUp 0.3s ease;
+  }
+
+  .modal h2 {
+    font-family: var(--display);
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .modal p {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--teal);
+    color: #0a0e13;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:hover { background: #00e8b8; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover { border-color: var(--text-dim); color: var(--text); }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 20px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 500px) {
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .header-status { display: none; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo-block">
+        <div class="logo-icon">🌊</div>
+        <div class="logo-text">
+          <h1>Ditch Flood Monitor</h1>
+          <p>Hernando, MS · Real-time AI Analysis</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <div class="status-dot"></div>
+        <span id="last-check">Checking...</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn-scan" id="btn-scan" onclick="triggerScan()">
+          🔍 Run Scan Now
+        </button>
+        <button class="btn-report" onclick="openReport()">
+          📄 Generate Report
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card teal" style="animation-delay:0.1s">
+      <div class="stat-label">Total Checks</div>
+      <div class="stat-value" id="stat-total">—</div>
+      <div class="stat-sub">since monitoring began</div>
+    </div>
+    <div class="stat-card red" style="animation-delay:0.2s">
+      <div class="stat-label">Flood Events</div>
+      <div class="stat-value" id="stat-floods">—</div>
+      <div class="stat-sub">alerts triggered</div>
+    </div>
+    <div class="stat-card amber" style="animation-delay:0.3s">
+      <div class="stat-label">Last Event</div>
+      <div class="stat-value" id="stat-last-level" style="font-size:24px">—</div>
+      <div class="stat-sub" id="stat-last-time">no events yet</div>
+    </div>
+    <div class="stat-card blue" style="animation-delay:0.4s">
+      <div class="stat-label">Monitor Status</div>
+      <div class="stat-value" style="font-size:24px; color:#4a9eff">ACTIVE</div>
+      <div class="stat-sub">30-min / rain: 5-min</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="panel" style="margin-bottom:24px">
+    <div class="panel-header">
+      <div class="panel-title"><span></span>Water Level History</div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)" id="chart-range">Loading...</span>
+    </div>
+    <div class="chart-area">
+      <div class="chart-bars" id="chart-bars">
+        <!-- bars injected by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Timeline -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span></span>Event Log</div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)" id="event-count">Loading...</span>
+      </div>
+      <div class="timeline" id="timeline">
+        <div style="padding:40px;text-align:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;">
+          Loading events...
+        </div>
+      </div>
+    </div>
+
+    <!-- Snapshot + details -->
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><span></span>Snapshot Viewer</div>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim)" id="cam-count"></span>
+        </div>
+        <div class="snapshot-viewer">
+          <div class="snapshot-img-wrap" id="snapshot-wrap">
+            <div class="snapshot-placeholder">
+              <div style="font-size:32px;margin-bottom:8px">📷</div>
+              Select an event to view snapshots
+            </div>
+          </div>
+          <div class="snapshot-meta" id="snapshot-meta" style="display:none">
+            <div class="meta-row">
+              <span class="meta-key">Timestamp</span>
+              <span class="meta-val" id="meta-time">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Water Level</span>
+              <span class="meta-val" id="meta-level">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Alert Sent</span>
+              <span class="meta-val" id="meta-alert">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="analysis-box" id="analysis-box" style="display:none">
+          <p id="analysis-text"></p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><span></span>Monitor Information</div>
+        </div>
+        <div class="live-section">
+          <div class="snapshot-meta" style="display:flex;flex-direction:column;gap:10px">
+            <div class="meta-row">
+              <span class="meta-key">Property</span>
+              <span class="meta-val">1700 West Cove</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Subdivision</span>
+              <span class="meta-val">Forrest Meadows</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Location</span>
+              <span class="meta-val">Hernando, MS</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Contact</span>
+              <span class="meta-val">Sam McDonald</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Phone</span>
+              <span class="meta-val">901-619-5451</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Monitor</span>
+              <span class="meta-val">AI Vision · LLaVA</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="container">
+    Flood Monitor · Hernando, MS · Powered by Raspberry Pi 5 + LLaVA Vision AI · ollamapi.com
+  </div>
+</footer>
+
+<!-- Report Modal -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal">
+    <h2>Generate Report</h2>
+    <p>Creates a PDF report of all flood monitoring data including timestamps, water levels, AI analysis, and event history. Suitable for presenting to city officials or developers.</p>
+    <div style="margin-bottom:24px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">
+          Include events from
+        </label>
+        <select id="report-filter" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:6px;font-family:var(--mono);font-size:12px;">
+          <option value="all">All time</option>
+          <option value="30">Last 30 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="7">Last 7 days</option>
+          <option value="floods">Flood events only</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="generateReport()">Generate PDF</button>
+      <button class="btn-secondary" onclick="closeReport()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img src="" alt="Snapshot">
+  <div class="lightbox-label"></div>
+  <div class="lightbox-close">CLICK ANYWHERE TO CLOSE</div>
+</div>
+
+<!-- Toast -->
+<div class="scan-toast" id="scan-toast"></div>
+
+<script>
+  const API = 'https://floodapi.ollamapi.com';
+  let RAW_EVENTS = [];
+
+  // ─── Snapshot URL helper ─────────────────────────────────────────────────────
+  function snapshotUrl(filepath) {
+    if (!filepath) return null;
+    const filename = filepath.split('/').pop();
+    return `${API}/api/snapshot/${filename}`;
+  }
+
+  // ─── Data ────────────────────────────────────────────────────────────────────
+  async function loadEvents() {
+    try {
+      const res = await fetch(`${API}/api/events`);
+      RAW_EVENTS = await res.json();
+    } catch (e) {
+      RAW_EVENTS = [];
+    }
+    renderStats();
+    renderChart();
+    renderTimeline();
+    if (RAW_EVENTS.length > 0) selectEvent(RAW_EVENTS.length - 1);
+  }
+
+  setInterval(loadEvents, 5 * 60 * 1000);
+
+  // ─── Stats ───────────────────────────────────────────────────────────────────
+  function renderStats() {
+    const total = RAW_EVENTS.length;
+    const floods = RAW_EVENTS.filter(e => e.flood_detected).length;
+    const lastFlood = [...RAW_EVENTS].reverse().find(e => e.flood_detected);
+
+    document.getElementById('stat-total').textContent = total || '—';
+    document.getElementById('stat-floods').textContent = floods || '—';
+
+    if (lastFlood) {
+      const level = parseLevel(lastFlood.analysis);
+      document.getElementById('stat-last-level').textContent = level.toUpperCase();
+      document.getElementById('stat-last-time').textContent = formatDate(lastFlood.timestamp);
+    }
+
+    const last = RAW_EVENTS[RAW_EVENTS.length - 1];
+    document.getElementById('last-check').textContent = last ?
+      'Last check: ' + formatTime(last.timestamp) : 'No data yet';
+  }
+
+  // ─── Chart ───────────────────────────────────────────────────────────────────
+  function renderChart() {
+    const levelHeight = { none: 5, unknown: 5, low: 30, medium: 55, high: 75, critical: 100 };
+    const bars = document.getElementById('chart-bars');
+    bars.innerHTML = '';
+
+    if (RAW_EVENTS.length === 0) {
+      bars.innerHTML = '<div style="color:var(--text-dim);font-family:var(--mono);font-size:12px;padding:20px">No data yet — waiting for first check</div>';
+      return;
+    }
+
+    RAW_EVENTS.forEach((e, i) => {
+      const level = parseLevel(e.analysis);
+      const h = levelHeight[level] || 5;
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-bar-wrap';
+      wrap.innerHTML = `
+        <div class="chart-bar ${level}" style="height:${h}%" title="${level} - ${formatTime(e.timestamp)}"></div>
+        <div class="chart-label">${formatTime(e.timestamp).replace(' ', '\n')}</div>
+      `;
+      wrap.addEventListener('click', () => selectEvent(i));
+      bars.appendChild(wrap);
+    });
+
+    const first = formatDate(RAW_EVENTS[0].timestamp);
+    const last = formatDate(RAW_EVENTS[RAW_EVENTS.length - 1].timestamp);
+    document.getElementById('chart-range').textContent = `${first} — ${last}`;
+  }
+
+  // ─── Timeline ────────────────────────────────────────────────────────────────
+  function renderTimeline() {
+    const tl = document.getElementById('timeline');
+    tl.innerHTML = '';
+
+    if (RAW_EVENTS.length === 0) {
+      tl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;">No events yet — monitoring active</div>';
+      document.getElementById('event-count').textContent = '0 events';
+      return;
+    }
+
+    document.getElementById('event-count').textContent = `${RAW_EVENTS.length} events`;
+
+    [...RAW_EVENTS].reverse().forEach((e, ri) => {
+      const i = RAW_EVENTS.length - 1 - ri;
+      const level = parseLevel(e.analysis);
+      const vivintCount = Object.keys(e.vivint_snapshots || {}).length;
+      const item = document.createElement('div');
+      item.className = 'event-item';
+      item.dataset.index = i;
+      item.innerHTML = `
+        <div class="event-time">
+          <div>${formatTime(e.timestamp)}</div>
+          <div class="date">${formatDate(e.timestamp)}</div>
+        </div>
+        <div class="event-body">
+          <div class="event-level level-${level}">${level.toUpperCase()}</div>
+          <div class="event-analysis">${e.analysis ? e.analysis.replace(/LEVEL:.*?\n/i, '').trim() : 'No analysis'}</div>
+          ${vivintCount > 0 ? `<div style="font-family:var(--mono);font-size:10px;color:var(--teal);margin-top:4px">📷 ${vivintCount + 1} cameras</div>` : ''}
+        </div>
+        <div>${e.flood_detected ? '<div class="event-alert">⚠ ALERT</div>' : ''}</div>
+      `;
+      item.addEventListener('click', () => selectEvent(i));
+      tl.appendChild(item);
+    });
+  }
+
+  // ─── Select Event ─────────────────────────────────────────────────────────────
+  function selectEvent(index) {
+    const e = RAW_EVENTS[index];
+    if (!e) return;
+
+    // Highlight selected row
+    document.querySelectorAll('.event-item').forEach(el => {
+      el.classList.toggle('selected', parseInt(el.dataset.index) === index);
+    });
+
+    const level = parseLevel(e.analysis);
+    const vivint = e.vivint_snapshots || {};
+    const hasVivint = Object.keys(vivint).length > 0;
+    const totalCams = 1 + Object.keys(vivint).length;
+
+    // Update cam count label
+    document.getElementById('cam-count').textContent = hasVivint
+      ? `${totalCams} cameras` : '1 camera';
+
+    // ── Build snapshot viewer ────────────────────────────────
+    const wrap = document.getElementById('snapshot-wrap');
+    wrap.innerHTML = '';
+    wrap.style.aspectRatio = '';
+
+    if (hasVivint) {
+      // Multi-camera grid: ditch full width on top, vivint below in pairs
+      const grid = document.createElement('div');
+      grid.className = 'snapshot-grid';
+      grid.style.padding = '12px';
+
+      // Ditch camera — full width
+      const ditchUrl = snapshotUrl(e.snapshot);
+      const ditchItem = document.createElement('div');
+      ditchItem.className = 'snapshot-grid-item full-width';
+      ditchItem.innerHTML = `
+        <div class="snapshot-grid-label">🎯 Ditch Monitor (Ring)</div>
+        <img class="snapshot-grid-img" src="${ditchUrl}" alt="Ditch"
+             style="aspect-ratio:16/9"
+             onerror="this.style.opacity=0.2;this.style.minHeight='80px'"
+             onclick="openLightbox('${ditchUrl}', 'Ditch Monitor (Ring)')">
+      `;
+      grid.appendChild(ditchItem);
+
+      // Vivint cameras in 2-column grid
+      Object.entries(vivint).forEach(([name, path]) => {
+        const url = snapshotUrl(path);
+        const item = document.createElement('div');
+        item.className = 'snapshot-grid-item';
+        item.innerHTML = `
+          <div class="snapshot-grid-label">📷 ${name}</div>
+          <img class="snapshot-grid-img" src="${url}" alt="${name}"
+               onerror="this.style.opacity=0.2;this.style.minHeight='80px'"
+               onclick="openLightbox('${url}', '${name}')">
+        `;
+        grid.appendChild(item);
+      });
+
+      wrap.appendChild(grid);
+
+    } else {
+      // Single ditch image
+      const url = snapshotUrl(e.snapshot);
+      if (url) {
+        const img = document.createElement('img');
+        img.className = 'snapshot-single';
+        img.src = url;
+        img.alt = 'Ditch snapshot';
+        img.onclick = () => openLightbox(url, 'Ditch Monitor (Ring)');
+        img.onerror = () => {
+          wrap.innerHTML = `<div class="snapshot-placeholder"><div style="font-size:32px;margin-bottom:8px">📷</div>Image not available</div>`;
+        };
+        wrap.appendChild(img);
+      } else {
+        wrap.innerHTML = `<div class="snapshot-placeholder"><div style="font-size:32px;margin-bottom:8px">📷</div>No snapshot available</div>`;
+      }
+    }
+
+    // ── Meta ─────────────────────────────────────────────────
+    document.getElementById('snapshot-meta').style.display = 'flex';
+    document.getElementById('meta-time').textContent = formatDate(e.timestamp) + ' ' + formatTime(e.timestamp);
+    document.getElementById('meta-level').textContent = level.toUpperCase();
+    document.getElementById('meta-alert').textContent = e.flood_detected ? '⚠️ Yes' : 'No';
+
+    // ── Analysis ─────────────────────────────────────────────
+    if (e.analysis) {
+      document.getElementById('analysis-box').style.display = 'block';
+      document.getElementById('analysis-text').textContent =
+        e.analysis.replace(/LEVEL:.*?\n/i, '').trim();
+    } else {
+      document.getElementById('analysis-box').style.display = 'none';
+    }
+  }
+
+  // ─── Lightbox ────────────────────────────────────────────────────────────────
+  function openLightbox(url, label) {
+    const lb = document.getElementById('lightbox');
+    lb.querySelector('img').src = url;
+    lb.querySelector('.lightbox-label').textContent = label;
+    lb.classList.add('open');
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+  }
+
+  // ─── Toast ───────────────────────────────────────────────────────────────────
+  function showToast(msg, type = '') {
+    const toast = document.getElementById('scan-toast');
+    toast.textContent = msg;
+    toast.className = `scan-toast visible ${type}`;
+    setTimeout(() => { toast.className = 'scan-toast'; }, 4000);
+  }
+
+  // ─── Manual Scan Trigger ─────────────────────────────────────────────────────
+  async function triggerScan() {
+    const btn = document.getElementById('btn-scan');
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.textContent = '⏳ Scanning...';
+    showToast('Running analysis on all cameras — this takes ~2 minutes...', '');
+
+    try {
+      const res = await fetch(`${API}/api/trigger`, { method: 'POST' });
+      if (res.status === 409) {
+        showToast('⚠️ Scan already in progress', 'error');
+        resetScanBtn();
+        return;
+      }
+      if (!res.ok) throw new Error('Trigger failed');
+      showToast('✓ Scan started — refreshing when complete', 'success');
+
+      let polls = 0;
+      const poll = setInterval(async () => {
+        polls++;
+        try {
+          const status = await fetch(`${API}/api/status`);
+          const { running } = await status.json();
+          if (!running || polls >= 12) {
+            clearInterval(poll);
+            resetScanBtn();
+            await loadEvents();
+            if (!running) showToast('✓ Scan complete — results updated', 'success');
+          }
+        } catch { clearInterval(poll); resetScanBtn(); }
+      }, 15000);
+
+    } catch (e) {
+      showToast('✗ Failed to trigger scan', 'error');
+      resetScanBtn();
+    }
+  }
+
+  function resetScanBtn() {
+    const btn = document.getElementById('btn-scan');
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.innerHTML = '🔍 Run Scan Now';
+  }
+
+  // ─── Report ──────────────────────────────────────────────────────────────────
+  function openReport() { document.getElementById('report-modal').classList.add('open'); }
+  function closeReport() { document.getElementById('report-modal').classList.remove('open'); }
+// ─── Report Generation ────────────────────────────────────────────────────
+  async function generateReport() {
+    closeReport();
+    showToast('Generating PDF report...', '');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+
+    // ── Filter events ──────────────────────────────────────────
+    const filter = document.getElementById('report-filter').value;
+    let events = [...RAW_EVENTS];
+
+    if (filter === 'floods') {
+      events = events.filter(e => e.flood_detected);
+    } else if (filter !== 'all') {
+      const days = parseInt(filter);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      events = events.filter(e => new Date(e.timestamp) >= cutoff);
+    }
+
+    const totalChecks = RAW_EVENTS.length;
+    const floodCount = RAW_EVENTS.filter(e => e.flood_detected).length;
+    const firstCheck = RAW_EVENTS.length > 0 ? new Date(RAW_EVENTS[0].timestamp) : new Date();
+    const lastCheck = RAW_EVENTS.length > 0 ? new Date(RAW_EVENTS[RAW_EVENTS.length - 1].timestamp) : new Date();
+    const generatedDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentW = pageW - margin * 2;
+
+    // ── Helper functions ───────────────────────────────────────
+    const addPageFooter = (pageNum, totalPages) => {
+      doc.setFontSize(8);
+      doc.setTextColor(100, 120, 140);
+      doc.text(`Forrest Meadows Flood Monitor · Hernando, MS · Page ${pageNum} of ${totalPages}`, pageW / 2, pageH - 10, { align: 'center' });
+      doc.text(`Generated: ${generatedDate}`, pageW / 2, pageH - 6, { align: 'center' });
+    };
+
+    const levelColor = (level) => {
+      switch(level) {
+        case 'critical': return [232, 64, 74];
+        case 'high':     return [255, 107, 107];
+        case 'medium':   return [245, 166, 35];
+        case 'low':      return [76, 175, 80];
+        default:         return [107, 127, 148];
+      }
+    };
+
+    // ── PAGE 1: Cover ──────────────────────────────────────────
+    // Header bar
+    doc.setFillColor(0, 200, 160);
+    doc.rect(0, 0, pageW, 40, 'F');
+
+    doc.setTextColor(10, 14, 19);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FLOOD MONITORING REPORT', pageW / 2, 18, { align: 'center' });
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Forrest Meadows Subdivision · Hernando, Mississippi', pageW / 2, 28, { align: 'center' });
+    doc.text(`1700 West Cove · AI-Powered Drainage Ditch Monitor`, pageW / 2, 34, { align: 'center' });
+
+    // Property info box
+    let y = 52;
+    doc.setFillColor(17, 23, 32);
+    doc.roundedRect(margin, y, contentW, 52, 3, 3, 'F');
+
+    doc.setTextColor(160, 176, 192);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+
+    const infoLeft = [
+      ['PROPERTY', '1700 West Cove, Hernando, MS 38632'],
+      ['SUBDIVISION', 'Forrest Meadows'],
+      ['CONTACT', 'Sam McDonald · 901-619-5451'],
+      ['MONITOR SYSTEM', 'Raspberry Pi 5 + LLaVA Vision AI + Ring Camera'],
+    ];
+    const infoRight = [
+      ['REPORT GENERATED', generatedDate],
+      ['MONITORING SINCE', firstCheck.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+      ['LAST CHECK', lastCheck.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+      ['VIVINT CAMERAS', 'Doorbell · Backyard · Driveway'],
+    ];
+
+    infoLeft.forEach(([key, val], i) => {
+      doc.setTextColor(100, 120, 140);
+      doc.setFontSize(7);
+      doc.text(key, margin + 6, y + 10 + i * 10);
+      doc.setTextColor(232, 237, 242);
+      doc.setFontSize(9);
+      doc.text(val, margin + 6, y + 15 + i * 10);
+    });
+
+    infoRight.forEach(([key, val], i) => {
+      doc.setTextColor(100, 120, 140);
+      doc.setFontSize(7);
+      doc.text(key, pageW / 2 + 4, y + 10 + i * 10);
+      doc.setTextColor(232, 237, 242);
+      doc.setFontSize(9);
+      doc.text(val, pageW / 2 + 4, y + 15 + i * 10);
+    });
+
+    // Stats row
+    y += 62;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(232, 237, 242);
+    doc.text('MONITORING SUMMARY', margin, y);
+
+    y += 6;
+    doc.setDrawColor(30, 45, 61);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    const stats = [
+      { label: 'TOTAL CHECKS', value: totalChecks.toString(), color: [0, 200, 160] },
+      { label: 'FLOOD ALERTS', value: floodCount.toString(), color: [232, 64, 74] },
+      { label: 'ALL CLEAR', value: (totalChecks - floodCount).toString(), color: [76, 175, 80] },
+      { label: 'ALERT RATE', value: totalChecks > 0 ? `${((floodCount/totalChecks)*100).toFixed(1)}%` : '0%', color: [245, 166, 35] },
+    ];
+
+    const statW = contentW / 4;
+    stats.forEach((s, i) => {
+      const x = margin + i * statW;
+      doc.setFillColor(17, 23, 32);
+      doc.roundedRect(x, y, statW - 4, 24, 2, 2, 'F');
+      doc.setFillColor(...s.color);
+      doc.rect(x, y, statW - 4, 2, 'F');
+      doc.setTextColor(...s.color);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text(s.value, x + (statW - 4) / 2, y + 14, { align: 'center' });
+      doc.setTextColor(100, 120, 140);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(s.label, x + (statW - 4) / 2, y + 20, { align: 'center' });
+    });
+
+    // Level breakdown
+    y += 34;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(232, 237, 242);
+    doc.text('WATER LEVEL BREAKDOWN', margin, y);
+
+    y += 6;
+    doc.setDrawColor(30, 45, 61);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    const levels = ['none', 'low', 'medium', 'high', 'critical'];
+    const levelCounts = {};
+    levels.forEach(l => levelCounts[l] = 0);
+    RAW_EVENTS.forEach(e => {
+      const l = parseLevel(e.analysis);
+      if (levelCounts[l] !== undefined) levelCounts[l]++;
+    });
+
+    const barMaxW = contentW - 60;
+    const maxCount = Math.max(...Object.values(levelCounts), 1);
+
+    levels.forEach((level, i) => {
+      const count = levelCounts[level];
+      const barW = (count / maxCount) * barMaxW;
+      const color = levelColor(level);
+
+      doc.setTextColor(160, 176, 192);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(level.toUpperCase(), margin, y + 5);
+
+      doc.setFillColor(26, 33, 48);
+      doc.roundedRect(margin + 30, y, barMaxW, 7, 1, 1, 'F');
+
+      if (count > 0) {
+        doc.setFillColor(...color);
+        doc.roundedRect(margin + 30, y, barW, 7, 1, 1, 'F');
+      }
+
+      doc.setTextColor(...color);
+      doc.setFontSize(8);
+      doc.text(count.toString(), margin + 30 + barMaxW + 4, y + 5.5);
+
+      y += 11;
+    });
+
+    // Purpose statement
+    y += 4;
+    doc.setFillColor(0, 200, 160, 0.1);
+    doc.setFillColor(17, 23, 32);
+    doc.roundedRect(margin, y, contentW, 38, 3, 3, 'F');
+    doc.setDrawColor(0, 200, 160);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, margin, y + 38);
+
+    doc.setTextColor(0, 200, 160);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ABOUT THIS REPORT', margin + 6, y + 8);
+
+    doc.setTextColor(160, 176, 192);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    const aboutText = `This report documents automated flood monitoring data collected at the drainage ditch on the property at 1700 West Cove in Forrest Meadows subdivision, Hernando, MS. Monitoring is performed automatically using AI-powered image analysis (LLaVA vision model running on a Raspberry Pi 5) with a Ring camera pointed at a calibrated stake with fluorescent orange water level markers numbered 1-3. Vivint security cameras (doorbell, backyard, driveway) capture area flood evidence when water reaches marker 1 or above. This data is intended to document recurring flooding conditions for review by city officials and property developers.`;
+    const splitAbout = doc.splitTextToSize(aboutText, contentW - 12);
+    doc.text(splitAbout, margin + 6, y + 16);
+
+    addPageFooter(1, 2);
+
+    // ── PAGE 2: Event Log ──────────────────────────────────────
+    doc.addPage();
+
+    doc.setFillColor(0, 200, 160);
+    doc.rect(0, 0, pageW, 16, 'F');
+    doc.setTextColor(10, 14, 19);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('COMPLETE EVENT LOG', pageW / 2, 10, { align: 'center' });
+
+    const filterLabel = filter === 'all' ? 'All Events' :
+                        filter === 'floods' ? 'Flood Events Only' :
+                        `Last ${filter} Days`;
+    doc.setFontSize(8);
+    doc.text(`Filter: ${filterLabel} · ${events.length} events shown`, pageW / 2, 14, { align: 'center' });
+
+    // Table
+    const tableRows = events.map(e => {
+      const d = new Date(e.timestamp);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const level = parseLevel(e.analysis);
+      const analysis = e.analysis
+        ? e.analysis.replace(/LEVEL:.*?\n/i, '').trim().slice(0, 180)
+        : 'No analysis';
+      const vivintCount = Object.keys(e.vivint_snapshots || {}).length;
+      const cameras = vivintCount > 0 ? `Ditch + ${vivintCount} area` : 'Ditch only';
+      return [dateStr, timeStr, level.toUpperCase(), e.flood_detected ? 'YES' : 'No', cameras, analysis];
+    });
+
+    doc.autoTable({
+      startY: 20,
+      head: [['Date', 'Time', 'Level', 'Alert', 'Cameras', 'AI Analysis']],
+      body: tableRows,
+      margin: { left: margin, right: margin },
+      styles: {
+        fontSize: 7.5,
+        cellPadding: 3,
+        fillColor: [17, 23, 32],
+        textColor: [160, 176, 192],
+        lineColor: [30, 45, 61],
+        lineWidth: 0.3,
+      },
+      headStyles: {
+        fillColor: [26, 33, 48],
+        textColor: [0, 200, 160],
+        fontStyle: 'bold',
+        fontSize: 8,
+      },
+      alternateRowStyles: {
+        fillColor: [26, 33, 48],
+      },
+      columnStyles: {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 14 },
+        4: { cellWidth: 26 },
+        5: { cellWidth: 'auto' },
+      },
+      didParseCell: (data) => {
+        if (data.column.index === 2 && data.section === 'body') {
+          const level = data.cell.raw.toLowerCase();
+          const c = levelColor(level);
+          data.cell.styles.textColor = c;
+          data.cell.styles.fontStyle = 'bold';
+        }
+        if (data.column.index === 3 && data.section === 'body') {
+          if (data.cell.raw === 'YES') {
+            data.cell.styles.textColor = [232, 64, 74];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      },
+      didDrawPage: (data) => {
+        const pageCount = doc.internal.getNumberOfPages();
+        addPageFooter(doc.internal.getCurrentPageInfo().pageNumber, pageCount);
+      }
+    });
+
+    // Fix footer page count on page 1
+    const totalPages = doc.internal.getNumberOfPages();
+    doc.setPage(1);
+    doc.setFillColor(10, 14, 19);
+    doc.rect(0, pageH - 14, pageW, 14, 'F');
+    addPageFooter(1, totalPages);
+
+    // ── Save ───────────────────────────────────────────────────
+    const filename = `flood-report-${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    showToast('✓ Report downloaded', 'success');
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+  function parseLevel(analysis) {
+    if (!analysis) return 'unknown';
+    const lower = analysis.toLowerCase();
+    for (const level of ['critical', 'high', 'medium', 'low', 'none']) {
+      if (lower.includes(`level: ${level}`)) return level;
+    }
+    return 'unknown';
+  }
+
+  async function triggerScan() {
+    const btn = document.getElementById('btn-scan');
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.textContent = '⏳ Scanning...';
+    showToast('Capturing snapshot and running analysis...', '');
+
+    try {
+      const res = await fetch(`${API}/api/trigger`, { method: 'POST' });
+      if (res.status === 409) {
+        showToast('⚠️ Scan already in progress', 'error');
+        resetScanBtn();
+        return;
+      }
+      if (!res.ok) throw new Error('Trigger failed');
+      showToast('✓ Scan started — refreshing when complete', 'success');
+
+      let polls = 0;
+      const poll = setInterval(async () => {
+        polls++;
+        try {
+          const status = await fetch(`${API}/api/status`);
+          const { running } = await status.json();
+          if (!running || polls >= 12) {
+            clearInterval(poll);
+            resetScanBtn();
+            await loadEvents();
+            // Auto-select the newest event to show the fresh snapshot
+            if (RAW_EVENTS.length > 0) selectEvent(RAW_EVENTS.length - 1);
+            if (!running) showToast('✓ Scan complete — snapshot updated', 'success');
+          }
+        } catch { clearInterval(poll); resetScanBtn(); }
+      }, 15000);
+
+    } catch (e) {
+      showToast('✗ Failed to trigger scan', 'error');
+      resetScanBtn();
+    }
+  }
+
+  // ─── Init ────────────────────────────────────────────────────────────────────
+  loadEvents();
+</script>
+</body>
+</html>

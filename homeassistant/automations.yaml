@@ -1,0 +1,41 @@
+- id: '1777826795106'
+  alias: Disk Space Warning
+  description: ''
+  triggers:
+  - entity_id: sensor.disk_usage_percent
+    above: 80
+    trigger: numeric_state
+  conditions: []
+  actions:
+  - data:
+      title: ⚠️ Disk Space Warning
+      message: Disk usage is {{ states('sensor.disk_usage_percent') }}% - Consider
+        cleaning up
+    action: persistent_notification.create
+  mode: single
+- id: '1777826829389'
+  alias: Memory Usage Warning
+  description: ''
+  triggers:
+  - entity_id: sensor.memory_usage_percent
+    above: 85
+    trigger: numeric_state
+  conditions: []
+  actions:
+  - data:
+      title: ⚠️ Memory Usage Warning
+      message: Memory usage is {{ states('sensor.memory_usage_percent') }}%
+    action: persistent_notification.create
+  mode: single
+- id: '1777838287855'
+  alias: Daily Home Summary
+  description: ''
+  triggers:
+  - at: 08:00:00
+    trigger: time
+  actions:
+  - data:
+      text: Give me a brief summary of today
+      agent_id: conversation.ollama_conversation
+    action: conversation.process
+  mode: single

@@ -1,0 +1,11 @@
+# Ignore large files that waste context
+*.jpg
+*.jpeg
+*.png
+*.log
+*.json.bak
+__pycache__/
+*.pyc
+node_modules/
+.git/
+snapshots/

@@ -1,0 +1,69 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "The email address you use to login to Vivint"
+        }
+      },
+      "mfa": {
+        "title": "Enter your MFA code from Vivint",
+        "data": {
+          "code": "MFA code"
+        }
+      },
+      "reauth_confirm": {
+        "description": "Reauthenticate Integration",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "disarm_code": "Disarm code",
+          "hd_stream": "Stream camera in HD",
+          "rtsp_stream": "Select which RTSP camera stream to use",
+          "rtsp_url_logging": "Log camera RTSP URLs (this contains potentially sensitive information)"
+        }
+      }
+    },
+    "error": { "disarm_code_invalid": "Disarm code is invalid" }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "doorbell_ding": "Doorbell pressed",
+      "motion_detected": "Motion detected"
+    }
+  },
+  "entity": {
+    "event": {
+      "doorbell": {
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "doorbell_ding": "Doorbell pressed"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "stocks": {
+    "tech_ai": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "GOOGL",
+      "META",
+      "TSLA",
+      "AMD",
+      "PLTR",
+      "ADBE",
+      "CRM",
+      "MSTR",
+      "NFLX",
+      "SNPS",
+      "AVGO",
+      "QCOM"
+    ],
+    "quantum": [
+      "IBM",
+      "IONQ",
+      "CSCO",
+      "INTC"
+    ],
+    "medical": [
+      "JNJ",
+      "UNH",
+      "PFE",
+      "ABBV",
+      "AMGN",
+      "TMO",
+      "ILMN",
+      "VEEV",
+      "DXCM",
+      "REGN"
+    ],
+    "growth": [
+      "SQ",
+      "COIN",
+      "SHOP",
+      "ZM",
+      "DASH"
+    ]
+  },
+  "crypto": {
+    "major": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "XRP",
+      "ADA",
+      "AVAX",
+      "DOGE",
+      "MATIC",
+      "LINK",
+      "UNI",
+      "AAVE",
+      "NEAR",
+      "FTM",
+      "ARB",
+      "OP"
+    ]
+  },
+  "score_weights": {
+    "stocks": {
+      "growth": 0.40,
+      "dividend": 0.20,
+      "momentum": 0.40
+    },
+    "crypto": {
+      "growth": 0.40,
+      "market_health": 0.20,
+      "momentum": 0.40
+    }
+  },
+  "update_frequency": "daily",
+  "total_assets": 50
+}

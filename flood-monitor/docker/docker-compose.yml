@@ -1,0 +1,11 @@
+services:
+  flood-api:
+    build: .
+    container_name: flood-api
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /mnt/ssd/flood-monitor/logs:/mnt/ssd/flood-monitor/logs
+      - /mnt/ssd/flood-monitor/snapshots:/mnt/ssd/flood-monitor/snapshots
+      - /mnt/ssd/flood-monitor/flood_monitor.py:/mnt/ssd/flood-monitor/flood_monitor.py
+      - /mnt/ssd/flood-monitor/.env:/mnt/ssd/flood-monitor/.env

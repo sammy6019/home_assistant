@@ -1,0 +1,78 @@
+services:
+  # FastAPI Backend
+  backend:
+    image: finance-dashboard:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance-dashboard-api
+    ports:
+      - "8001:8000"
+    environment:
+      - OLLAMA_HOST=http://192.168.1.227:11434
+      - PYTHONUNBUFFERED=1
+      - ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY:-demo}
+    volumes:
+      - /mnt/ssd/finance-dashboard/backend:/app
+      - /mnt/ssd/finance-dashboard/cache:/tmp/finance_cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://backend:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - finance-network
+    labels:
+      - "com.example.description=Finance Dashboard API"
+      - "portainer.accessControl=public"
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance-dashboard-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - REACT_APP_API_URL=/api
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - finance-network
+    labels:
+      - "com.example.description=Finance Dashboard Frontend"
+      - "portainer.accessControl=public"
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: finance-dashboard-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /mnt/ssd/finance-dashboard/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /mnt/ssd/finance-dashboard/certs:/etc/nginx/certs:ro
+      - /mnt/ssd/finance-dashboard/nginx/logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks:
+      - finance-network
+    labels:
+      - "com.example.description=Nginx Reverse Proxy"
+      - "portainer.accessControl=public"
+
+# Network for inter-service communication
+networks:
+  finance-network:
+    driver: bridge
+
+# NOTE: Ollama runs locally on the Pi (NOT in Docker)
+# Backend connects via host.docker.internal:11434
+# All persistent data stored on /mnt/ssd

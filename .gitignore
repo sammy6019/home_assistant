@@ -1,0 +1,35 @@
+# Secrets and credentials
+**/.env
+**/secrets.yaml
+**/*.key
+**/*.pem
+
+# Databases
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+
+# Home Assistant runtime/cache
+homeassistant/.storage/
+homeassistant/deps/
+homeassistant/tts/
+homeassistant/backups/
+homeassistant/home-assistant.log*
+homeassistant/wget-log*
+
+# Ollama model cache
+.ollama/
+
+# Logs
+logs/
+**/*.log
+
+# Backups
+backups/
+**/*.tar.gz
+
+# Misc
+__pycache__/
+*.pyc
+.DS_Store

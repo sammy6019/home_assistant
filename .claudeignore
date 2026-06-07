@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+*.lock
+__pycache__/
+.git/
+*.db
+*.sqlite
+.venv/
+venv/
+.docker/
+.pytest_cache/
+homeassistant/.storage/
+homeassistant/backups/
+homeassistant/www/
+ollama/
+.ollama/
