@@ -27,6 +27,31 @@
       message: Memory usage is {{ states('sensor.memory_usage_percent') }}%
     action: persistent_notification.create
   mode: single
+- id: '1780000000001'
+  alias: Nest Low Temperature Alert
+  description: Notify and log when living room temperature drops below 65°F
+  triggers:
+  - entity_id: sensor.living_room_temperature
+    below: 65
+    trigger: numeric_state
+  conditions: []
+  actions:
+  - data:
+      title: "\U0001F9CA Low Temperature Alert"
+      message: "Living room temperature has dropped to {{ states('sensor.living_room_temperature') }}\
+        °F - below the 65°F threshold."
+    action: notify.mobile_app_iphone
+  - data:
+      title: "\U0001F9CA Low Temperature Alert"
+      message: "Living room temperature dropped to {{ states('sensor.living_room_temperature') }}\
+        °F at {{ now().strftime('%H:%M') }}"
+    action: persistent_notification.create
+  - data:
+      message: "LOW TEMP ALERT: Living room at {{ states('sensor.living_room_temperature') }}\
+        °F (threshold: 65°F)"
+      level: warning
+    action: system_log.write
+  mode: single
 - id: '1777838287855'
   alias: Daily Home Summary
   description: ''

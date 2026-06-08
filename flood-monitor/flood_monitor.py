@@ -2,7 +2,7 @@ import os
 import json
 import base64
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import logging
 import time
 
@@ -11,6 +11,9 @@ HA_URL = 'http://192.168.1.227:8123'
 SNAPSHOT_DIR = '/mnt/ssd/flood-monitor/snapshots'
 LOG_DIR = '/mnt/ssd/flood-monitor/logs'
 LOG_FILE = f'{LOG_DIR}/flood_monitor.log'
+SNAPSHOT_RETENTION_DAYS = 7
+ALERT_COOLDOWN_MINUTES = 30
+COOLDOWN_FILE = f'{LOG_DIR}/.last_alert'
 
 # Load token from environment or .env file
 HA_TOKEN = os.environ.get('HA_TOKEN')
@@ -37,32 +40,29 @@ VIVINT_CAMERAS = [
 ]
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-import logging
-from datetime import timezone, timedelta
-
-class CSTFormatter(logging.Formatter):
+class LocalTimezoneFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
-        cst = timezone(timedelta(hours=-6))
-        ct = datetime.fromtimestamp(record.created, cst)
-        return ct.strftime('%Y-%m-%d %H:%M:%S')
+        ct = datetime.fromtimestamp(record.created).astimezone()
+        return ct.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 handler = logging.FileHandler(LOG_FILE)
-handler.setFormatter(CSTFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+handler.setFormatter(LocalTimezoneFormatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 
 # ── Snapshot ─────────────────────────────────────────────────────────────────
 def get_snapshot(entity_id, label):
-    """Grab snapshot from any HA camera"""
+    """Grab snapshot from any HA camera via camera_proxy.
+    For Vivint cameras, first trigger a snapshot service call to wake the cloud
+    stream, then immediately fetch via proxy."""
     try:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         snapshot_path = f'{SNAPSHOT_DIR}/snapshot_{label}_{timestamp}.jpg'
 
-        # For Vivint cameras use the HA snapshot service
-        # which forces HA to actively request a frame from the cloud
         if entity_id != PRIMARY_CAMERA['entity']:
-            service_response = requests.post(
+            # Wake the Vivint cloud stream before fetching
+            requests.post(
                 f'{HA_URL}/api/services/camera/snapshot',
                 headers={
                     'Authorization': f'Bearer {HA_TOKEN}',
@@ -70,32 +70,24 @@ def get_snapshot(entity_id, label):
                 },
                 json={
                     'entity_id': entity_id,
-                    'filename': f'/tmp/snapshot_{label}_{timestamp}.jpg'
+                    'filename': f'/tmp/vivint_wake_{label}.jpg'
                 },
                 timeout=30
             )
-            if service_response.status_code not in [200, 201]:
-                logging.error(f'[{label}] HA snapshot service failed: {service_response.status_code}')
-                # Fall through to camera_proxy as backup
-            else:
-                # Download the saved file via HA file API
-                time.sleep(2)  # Give HA a moment to save it
+            time.sleep(2)
 
-        # Use camera_proxy for Ring or as fallback
-        image_url = f'{HA_URL}/api/camera_proxy/{entity_id}'
         img_response = requests.get(
-            image_url,
+            f'{HA_URL}/api/camera_proxy/{entity_id}',
             headers={'Authorization': f'Bearer {HA_TOKEN}'},
             timeout=30
         )
 
         if img_response.status_code != 200:
-            logging.error(f'[{label}] Snapshot download failed: {img_response.status_code} - {img_response.text[:200]}')
+            logging.error(f'[{label}] Snapshot failed: {img_response.status_code} - {img_response.text[:200]}')
             return None
 
-        content_type = img_response.headers.get('Content-Type', '')
-        if 'image' not in content_type:
-            logging.error(f'[{label}] Unexpected content type: {content_type}')
+        if 'image' not in img_response.headers.get('Content-Type', ''):
+            logging.error(f'[{label}] Unexpected content type: {img_response.headers.get("Content-Type")}')
             return None
 
         with open(snapshot_path, 'wb') as f:
@@ -111,9 +103,25 @@ def get_snapshot(entity_id, label):
         logging.error(f'[{label}] Error getting snapshot: {e}')
         return None
 
+# ── Snapshot Cleanup ──────────────────────────────────────────────────────────
+def cleanup_old_snapshots():
+    """Remove snapshots older than SNAPSHOT_RETENTION_DAYS."""
+    cutoff = time.time() - (SNAPSHOT_RETENTION_DAYS * 86400)
+    removed = 0
+    try:
+        for fname in os.listdir(SNAPSHOT_DIR):
+            fpath = os.path.join(SNAPSHOT_DIR, fname)
+            if os.path.isfile(fpath) and os.path.getmtime(fpath) < cutoff:
+                os.remove(fpath)
+                removed += 1
+        if removed:
+            logging.info(f'Cleaned up {removed} snapshots older than {SNAPSHOT_RETENTION_DAYS} days')
+    except Exception as e:
+        logging.warning(f'Snapshot cleanup failed: {e}')
+
 # ── Ollama Analysis ───────────────────────────────────────────────────────────
 def analyze_ditch(image_path):
-    """Analyze ditch image for water level vs fluorescent orange numbered markers"""
+    """Analyze ditch image for water level vs fluorescent orange numbered markers."""
     prompt = """You are a flood detection system analyzing a drainage ditch camera image.
     This may be a nighttime or low-light image.
 
@@ -139,7 +147,7 @@ FLOOD LEVELS:
 - none: markers not visible OR no water visible OR uncertain
 - low: water clearly visible but below marker 1
 - medium: water clearly at or covering marker 1
-- high: water clearly at or covering marker 2  
+- high: water clearly at or covering marker 2
 - critical: water clearly at marker 3 or above, or pipe fully submerged
 
 ANSWER FORMAT:
@@ -153,42 +161,40 @@ Start with: LEVEL: (none/low/medium/high/critical)
     try:
         with open(image_path, 'rb') as f:
             image_data = base64.b64encode(f.read()).decode('utf-8')
+    except Exception as e:
+        logging.error(f'Failed to read image for analysis: {e}')
+        return None
 
-       # Retry up to 2 times with extended timeout
-        last_error = None
-        for attempt in range(2):
-            try:
-                response = requests.post(
-                    'http://localhost:11434/api/generate',
-                    json={
-                        'model': 'llava',
-                        'prompt': prompt,
-                        'images': [image_data],
-                        'stream': False
-                    },
-                    timeout=480
-                )
-                analysis = response.json()['response'].strip()
-                logging.info(f'Analysis: {analysis}')
-                return analysis
-            except Exception as e:
-                last_error = e
-                logging.warning(f'Ollama attempt {attempt + 1} failed: {e}')
+    last_error = None
+    for attempt in range(2):
+        try:
+            response = requests.post(
+                'http://localhost:11434/api/generate',
+                json={
+                    'model': 'llava',
+                    'prompt': prompt,
+                    'images': [image_data],
+                    'stream': False,
+                    'keep_alive': 0
+                },
+                timeout=480
+            )
+            response.raise_for_status()
+            analysis = response.json()['response'].strip()
+            logging.info(f'Analysis: {analysis}')
+            return analysis
+        except Exception as e:
+            last_error = e
+            logging.warning(f'Ollama attempt {attempt + 1} failed: {e}')
+            if attempt < 1:
                 time.sleep(10)
 
-        logging.error(f'Ollama failed after 2 attempts: {last_error}')
-        return None 
-        
-        analysis = response.json()['response'].strip()
-        logging.info(f'Analysis: {analysis}')
-        return analysis
-    except Exception as e:
-        logging.error(f'Error analyzing ditch image: {e}')
-        return None
+    logging.error(f'Ollama failed after 2 attempts: {last_error}')
+    return None
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def parse_level(analysis):
-    """Extract flood level from analysis text"""
+    """Extract flood level from analysis text."""
     if not analysis:
         return 'unknown'
     lower = analysis.lower()
@@ -197,41 +203,77 @@ def parse_level(analysis):
             return level
     return 'unknown'
 
+def _markers_visible(lower):
+    """Return True if the model confirmed markers were visible."""
+    # Look for the structured answer to question 1
+    for phrase in ('markers? yes', 'numbered markers? yes', 'see the fluorescent orange numbered markers? yes'):
+        if phrase in lower:
+            return True
+    for phrase in ('markers? no', 'numbered markers? no', 'see the fluorescent orange numbered markers? no'):
+        if phrase in lower:
+            return False
+    # Ambiguous — treat as not visible to be safe
+    return False
+
+def _is_nighttime(lower):
+    """Return True if the model flagged the image as dark/nighttime."""
+    return 'dark or nighttime? yes' in lower or 'nighttime? yes' in lower
+
 def check_flood_alert(analysis):
-    """Only alert on high/critical AND markers are confirmed visible"""
+    """Only alert on high/critical with confirmed marker visibility and daytime image."""
     if not analysis:
         return False
     lower = analysis.lower()
     level = parse_level(analysis)
     if level not in ['high', 'critical']:
         return False
-    # Don't alert if markers weren't visible
-    if 'markers? no' in lower or 'markers? n' in lower:
-        logging.warning('Suppressed alert — markers not visible in image')
+    if not _markers_visible(lower):
+        logging.warning('Suppressed alert — markers not confirmed visible')
         return False
-    # Don't alert if it was a dark/nighttime image
-    if 'nighttime? yes' in lower or 'dark or nighttime? yes' in lower:
+    if _is_nighttime(lower):
         logging.warning('Suppressed alert — nighttime image, insufficient confidence')
         return False
     return True
 
 def above_first_line(analysis):
-    """Only trigger Vivint capture if markers visible and water confirmed"""
+    """Trigger Vivint capture only if markers visible, daytime, and water confirmed."""
     if not analysis:
         return False
     lower = analysis.lower()
     level = parse_level(analysis)
     if level not in ['medium', 'high', 'critical']:
         return False
-    if 'markers? no' in lower or 'nighttime? yes' in lower or 'dark or nighttime? yes' in lower:
+    if not _markers_visible(lower) or _is_nighttime(lower):
         return False
     return True
 
+# ── Alert Cooldown ────────────────────────────────────────────────────────────
+def is_within_cooldown():
+    """Return True if an alert was sent recently (within ALERT_COOLDOWN_MINUTES)."""
+    try:
+        if not os.path.exists(COOLDOWN_FILE):
+            return False
+        last = float(open(COOLDOWN_FILE).read().strip())
+        elapsed = (time.time() - last) / 60
+        if elapsed < ALERT_COOLDOWN_MINUTES:
+            logging.info(f'Alert suppressed — cooldown active ({elapsed:.0f}/{ALERT_COOLDOWN_MINUTES} min)')
+            return True
+    except Exception:
+        pass
+    return False
+
+def record_alert_sent():
+    try:
+        with open(COOLDOWN_FILE, 'w') as f:
+            f.write(str(time.time()))
+    except Exception as e:
+        logging.warning(f'Failed to write cooldown file: {e}')
+
 # ── Notification ──────────────────────────────────────────────────────────────
 def send_ha_notification(message):
-    """Send push notification via Home Assistant"""
+    """Send push notification via Home Assistant. Returns True on success."""
     try:
-        requests.post(
+        resp = requests.post(
             f'{HA_URL}/api/services/notify/mobile_app_iphone',
             headers={
                 'Authorization': f'Bearer {HA_TOKEN}',
@@ -243,78 +285,80 @@ def send_ha_notification(message):
             },
             timeout=15
         )
-        logging.info('Flood alert notification sent!')
+        if resp.status_code not in (200, 201):
+            logging.error(f'Notification failed: HTTP {resp.status_code}')
+            return False
+        logging.info('Flood alert notification sent')
+        return True
     except Exception as e:
         logging.error(f'Error sending notification: {e}')
-
+        return False
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def run_monitor():
-    """Main monitoring function"""
+    """Main monitoring function."""
     logging.info('Starting flood monitor check')
-    print(f'[{datetime.now()}] Running flood monitor check...')
 
-    timestamp = datetime.now().isoformat()
+    cleanup_old_snapshots()
 
     # ── Step 1: Ditch camera — always runs ──────────────────────
-    print('Grabbing snapshot: ditch...')
+    logging.info('Grabbing ditch snapshot...')
     ditch_snapshot = get_snapshot(PRIMARY_CAMERA['entity'], PRIMARY_CAMERA['name'])
 
     if not ditch_snapshot:
-        print('Failed to get ditch snapshot — aborting')
         logging.error('Aborting — could not get ditch snapshot')
         return
 
-    print('Analyzing ditch image...')
+    logging.info('Analyzing ditch image...')
     analysis = analyze_ditch(ditch_snapshot)
 
     if not analysis:
-        print('Failed to analyze ditch image — aborting')
         logging.error('Aborting — could not analyze ditch image')
         return
 
     level = parse_level(analysis)
     alert = check_flood_alert(analysis)
-    print(f'[ditch] Level: {level} | Alert: {alert}')
+    logging.info(f'Level: {level} | Alert: {alert}')
 
     # ── Step 2: Vivint cameras — only if above marker 1 ─────────
     vivint_snapshots = {}
 
     if above_first_line(analysis):
-        print(f'Water above marker 1 ({level}) — capturing Vivint cameras...')
+        logging.info(f'Water above marker 1 ({level}) — capturing Vivint cameras...')
         for cam in VIVINT_CAMERAS:
-            print(f'Grabbing snapshot: {cam["name"]}...')
-            # Retry up to 3 times with delay — Vivint cloud can be slow
             path = None
             for attempt in range(3):
                 path = get_snapshot(cam['entity'], cam['name'])
                 if path:
                     break
-                print(f'[{cam["name"]}] Attempt {attempt + 1} failed, retrying in 10s...')
+                logging.warning(f'[{cam["name"]}] Attempt {attempt + 1} failed, retrying in 10s...')
                 time.sleep(10)
             if path:
                 vivint_snapshots[cam['name']] = path
-                print(f'[{cam["name"]}] Captured')
             else:
-                print(f'[{cam["name"]}] Failed after 3 attempts')
+                logging.error(f'[{cam["name"]}] Failed after 3 attempts')
     else:
-        print(f'Level is {level} — below marker 1, skipping Vivint cameras')
+        logging.info(f'Level is {level} — below marker 1, skipping Vivint cameras')
 
     # ── Step 3: Send alert if needed ────────────────────────────
     if alert:
-        lines = ['⚠️ Flood detected at ditch!\n']
-        lines.append(f'📊 Level: {level.upper()}')
-        lines.append(f'{analysis[:200]}\n')
-        if vivint_snapshots:
-            lines.append(f'📷 Area snapshots captured: {", ".join(vivint_snapshots.keys())}')
-        send_ha_notification('\n'.join(lines))
-        print('FLOOD ALERT SENT')
+        if is_within_cooldown():
+            logging.info('Alert suppressed by cooldown')
+        else:
+            lines = ['⚠️ Flood detected at ditch!\n']
+            lines.append(f'📊 Level: {level.upper()}')
+            lines.append(f'{analysis[:200]}\n')
+            if vivint_snapshots:
+                lines.append(f'📷 Area snapshots captured: {", ".join(vivint_snapshots.keys())}')
+            if send_ha_notification('\n'.join(lines)):
+                record_alert_sent()
+            logging.warning(f'FLOOD ALERT SENT — level: {level}')
     else:
-        print('No flooding detected - all clear')
+        logging.info('No flooding detected — all clear')
 
     # ── Step 4: Write log entry ──────────────────────────────────
     log_entry = {
-        'timestamp': timestamp,
+        'timestamp': datetime.now().isoformat(),
         'snapshot': ditch_snapshot,
         'analysis': analysis,
         'flood_detected': alert,
