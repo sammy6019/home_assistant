@@ -38,3 +38,32 @@ http:
 
 shell_command:
   run_flood_monitor: "python3 /mnt/ssd/flood-monitor/flood_monitor.py"
+
+rest:
+  - scan_interval: 60
+    resource: http://192.168.1.227:8082/api/status
+    sensor:
+      - name: "Flood Monitor Running"
+        value_template: "{{ 'active' if value_json.running else 'idle' }}"
+
+  - scan_interval: 60
+    resource: http://192.168.1.227:8082/api/events
+    sensor:
+      - name: "Flood Last Check"
+        value_template: >
+          {% set events = value_json %}
+          {% if events %}{{ events[-1].timestamp[:16] | replace('T', ' ') }}{% else %}unknown{% endif %}
+      - name: "Flood Water Level"
+        value_template: >
+          {% set events = value_json %}
+          {% if events %}{{ events[-1].level }}{% else %}unknown{% endif %}
+      - name: "Flood Alert Active"
+        value_template: >
+          {% set events = value_json %}
+          {% if events %}{{ events[-1].flood_detected }}{% else %}false{% endif %}
+      - name: "Flood Last Snapshot"
+        value_template: >
+          {% set events = value_json %}
+          {% if events %}{{ events[-1].snapshot | default('') }}{% else %}{% endif %}
+      - name: "Flood Event Count"
+        value_template: "{{ value_json | length }}"

@@ -74,7 +74,7 @@ def get_snapshot(entity_id, label):
                 },
                 timeout=30
             )
-            time.sleep(2)
+            time.sleep(5)
 
         img_response = requests.get(
             f'{HA_URL}/api/camera_proxy/{entity_id}',
@@ -175,7 +175,7 @@ Start with: LEVEL: (none/low/medium/high/critical)
                     'prompt': prompt,
                     'images': [image_data],
                     'stream': False,
-                    'keep_alive': 0
+                    'keep_alive': 300
                 },
                 timeout=480
             )
