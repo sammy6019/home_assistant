@@ -64,3 +64,4 @@
       agent_id: conversation.ollama_conversation
     action: conversation.process
   mode: single
+  enabled: false

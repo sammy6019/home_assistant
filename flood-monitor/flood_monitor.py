@@ -11,7 +11,7 @@ HA_URL = 'http://192.168.1.227:8123'
 SNAPSHOT_DIR = '/mnt/ssd/flood-monitor/snapshots'
 LOG_DIR = '/mnt/ssd/flood-monitor/logs'
 LOG_FILE = f'{LOG_DIR}/flood_monitor.log'
-SNAPSHOT_RETENTION_DAYS = 7
+SNAPSHOT_RETENTION_DAYS = 30
 ALERT_COOLDOWN_MINUTES = 30
 COOLDOWN_FILE = f'{LOG_DIR}/.last_alert'
 
@@ -327,16 +327,11 @@ def run_monitor():
         logging.info(f'Water above marker 1 ({level}) — capturing Vivint cameras...')
         for cam in VIVINT_CAMERAS:
             path = None
-            for attempt in range(3):
-                path = get_snapshot(cam['entity'], cam['name'])
-                if path:
-                    break
-                logging.warning(f'[{cam["name"]}] Attempt {attempt + 1} failed, retrying in 10s...')
-                time.sleep(10)
+            path = get_snapshot(cam['entity'], cam['name'])
             if path:
                 vivint_snapshots[cam['name']] = path
             else:
-                logging.error(f'[{cam["name"]}] Failed after 3 attempts')
+                logging.error(f'[{cam["name"]}] Snapshot failed, skipping')
     else:
         logging.info(f'Level is {level} — below marker 1, skipping Vivint cameras')
 
