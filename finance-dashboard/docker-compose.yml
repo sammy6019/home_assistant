@@ -9,7 +9,7 @@ services:
     ports:
       - "8001:8000"
     environment:
-      - OLLAMA_HOST=http://192.168.1.227:11434
+      - OLLAMA_HOST=http://host.docker.internal:11434
       - PYTHONUNBUFFERED=1
       - ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY:-demo}
     volumes:
@@ -22,6 +22,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - finance-network
     labels:
@@ -56,6 +58,7 @@ services:
       - "443:443"
     volumes:
       - /mnt/ssd/finance-dashboard/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /mnt/ssd/finance-dashboard/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - /mnt/ssd/finance-dashboard/certs:/etc/nginx/certs:ro
       - /mnt/ssd/finance-dashboard/nginx/logs:/var/log/nginx
     depends_on:
