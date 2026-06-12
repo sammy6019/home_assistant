@@ -24,9 +24,9 @@ views:
             icon: mdi:counter
 
       - type: picture-glance
-        title: Ditch Camera (Ring)
-        entity: camera.garden_live_view
-        camera_image: camera.garden_live_view
+        title: Doorbell Camera
+        entity: camera.doorbell
+        camera_image: camera.doorbell
         camera_view: live
         entities:
           - entity: sensor.garden_battery
@@ -57,9 +57,9 @@ views:
       - type: horizontal-stack
         cards:
           - type: picture-entity
-            title: Ditch (Ring)
-            entity: camera.garden_live_view
-            camera_image: camera.garden_live_view
+            title: Doorbell
+            entity: camera.doorbell
+            camera_image: camera.doorbell
             camera_view: live
             show_name: true
             show_state: false
