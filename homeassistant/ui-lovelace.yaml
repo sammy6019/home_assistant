@@ -208,9 +208,6 @@ views:
                 camera_view: live
                 entities: []
 
-          - type: picture
-            image: /local/doorbell_last.jpg
-            alt_text: Last visitor capture
 
           - type: markdown
             content: >
