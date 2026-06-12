@@ -24,29 +24,11 @@ views:
             icon: mdi:counter
 
       - type: picture-glance
-        title: Ditch Camera (Ring)
-        entity: camera.garden_live_view
-        camera_image: camera.garden_live_view
+        title: Driveway Camera
+        entity: camera.driveway
+        camera_image: camera.driveway
         camera_view: live
-        entities:
-          - entity: sensor.garden_battery
-            icon: mdi:battery
-          - entity: switch.garden_motion_detection
-            icon: mdi:motion-sensor
-          - entity: sensor.garden_last_activity
-            icon: mdi:clock
-
-      - type: entities
-        title: Ring Camera Status
-        entities:
-          - entity: sensor.garden_battery
-            name: Battery
-          - entity: sensor.garden_last_activity
-            name: Last Activity
-          - entity: switch.garden_motion_detection
-            name: Motion Detection
-          - entity: event.garden_motion
-            name: Last Motion
+        entities: []
 
       - type: entities
         title: Flood Monitor Controls
@@ -113,9 +95,9 @@ views:
           - type: markdown
             content: "## 📷 All Cameras"
           - type: picture-glance
-            title: Ditch (Ring)
-            entity: camera.garden_live_view
-            camera_image: camera.garden_live_view
+            title: Driveway Camera
+            entity: camera.driveway
+            camera_image: camera.driveway
             camera_view: live
             entities: []
           - type: horizontal-stack
