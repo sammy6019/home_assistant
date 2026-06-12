@@ -1,6 +1,6 @@
 title: Home
 views:
-  - title: Flood Monitor
+  - title: "\U0001F4A7 Flood Monitor"
     path: flood
     icon: mdi:water-alert
     cards:
@@ -24,11 +24,17 @@ views:
             icon: mdi:counter
 
       - type: picture-glance
-        title: Driveway Camera
-        entity: camera.driveway
-        camera_image: camera.driveway
+        title: Ditch Camera (Ring)
+        entity: camera.garden_live_view
+        camera_image: camera.garden_live_view
         camera_view: live
-        entities: []
+        entities:
+          - entity: sensor.garden_battery
+            icon: mdi:battery
+          - entity: switch.garden_motion_detection
+            icon: mdi:motion-sensor
+          - entity: sensor.garden_last_activity
+            icon: mdi:clock-outline
 
       - type: entities
         title: Flood Monitor Controls
@@ -51,8 +57,9 @@ views:
       - type: horizontal-stack
         cards:
           - type: picture-entity
-            title: Doorbell
-            entity: camera.doorbell
+            title: Ditch (Ring)
+            entity: camera.garden_live_view
+            camera_image: camera.garden_live_view
             camera_view: live
             show_name: true
             show_state: false
@@ -176,22 +183,30 @@ views:
         entity: alarm_control_panel.sam_mcdonald_s_house
         name: Vivint Alarm
 
-  - title: Doorbell
+  - title: "\U0001F514 Doorbell"
     path: doorbell
     icon: mdi:doorbell-video
     cards:
       - type: vertical-stack
         cards:
-          - type: picture-glance
-            title: Doorbell Camera (Live)
-            entity: camera.doorbell
-            camera_image: camera.doorbell
-            camera_view: live
-            entities:
-              - entity: binary_sensor.doorbell_motion
-                icon: mdi:motion-sensor
-              - entity: input_boolean.doorbell_active
-                icon: mdi:doorbell
+          - type: horizontal-stack
+            cards:
+              - type: picture-glance
+                title: Vivint Doorbell (Live)
+                entity: camera.doorbell
+                camera_image: camera.doorbell
+                camera_view: live
+                entities:
+                  - entity: binary_sensor.doorbell_motion
+                    icon: mdi:motion-sensor
+                  - entity: input_boolean.doorbell_active
+                    icon: mdi:doorbell
+              - type: picture-glance
+                title: Driveway Camera (Live)
+                entity: camera.driveway
+                camera_image: camera.driveway
+                camera_view: live
+                entities: []
 
           - type: picture
             image: /local/doorbell_last.jpg
