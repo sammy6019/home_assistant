@@ -1,6 +1,9 @@
 import os
 import glob
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+CHICAGO = ZoneInfo('America/Chicago')
 import logging
 
 LOG_DIR = '/mnt/ssd/flood-monitor/logs'
@@ -18,7 +21,7 @@ logging.basicConfig(
 
 def cleanup_snapshots():
     """Delete snapshots older than KEEP_DAYS"""
-    cutoff = datetime.now() - timedelta(days=KEEP_DAYS)
+    cutoff = datetime.now(CHICAGO) - timedelta(days=KEEP_DAYS)
     snapshots = glob.glob(f'{SNAPSHOT_DIR}/*.jpg')
     
     deleted = 0
@@ -27,7 +30,7 @@ def cleanup_snapshots():
 
     for path in snapshots:
         try:
-            modified = datetime.fromtimestamp(os.path.getmtime(path))
+            modified = datetime.fromtimestamp(os.path.getmtime(path), tz=CHICAGO)
             if modified < cutoff:
                 size = os.path.getsize(path)
                 os.remove(path)

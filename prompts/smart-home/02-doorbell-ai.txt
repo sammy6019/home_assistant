@@ -1,0 +1,63 @@
+Build a smart doorbell AI system using Vivint camera and Claude API.
+
+Hardware: Vivint outdoor camera with built-in speaker
+Trigger: When doorbell rings, capture snapshot
+AI: Claude API vision model (claude-sonnet-4-6) analyzes person
+Response: TTS message through Vivint speaker
+
+Classification Logic:
+1. BUSINESS: Person in suit/uniform + visible company logo/briefcase
+   → Response: "Sorry, not interested in sales. Please leave."
+   
+2. HALLOWEEN_KIDS: Children's costumes + time is October 31
+   → Response: "Nice costume! Enjoy trick-or-treating!"
+   
+3. ANIMAL: Dog, cat, raccoon, wildlife (any non-human)
+   → Response: Play scary sound (air horn, barking dog) via speaker
+   
+4. VISITOR: Everyone else (delivery, friends, family, genuine visitors)
+   → Response: Let through / no auto-reply
+
+Implementation:
+
+1. Create webhook endpoint at /doorbell on main Pi
+   - Receives image from Vivint camera on doorbell ring
+   - Saves to /mnt/ssd/doorbell/captures/
+   - Timestamp each capture
+
+2. Build Claude API integration
+   - Use $ANTHROPIC_API_KEY from environment
+   - Send image to claude-sonnet-4-6 with vision prompt:
+     "Analyze this person at my doorbell. Respond with ONLY one word:
+      BUSINESS (if business attire + logo/briefcase visible)
+      HALLOWEEN_KIDS (if child in costume and today is Oct 31)
+      ANIMAL (if non-human)
+      VISITOR (for everyone else)"
+   
+3. Based on response, trigger HA automation
+   - BUSINESS: TTS message "Sorry, not interested in sales"
+   - HALLOWEEN_KIDS: TTS message "Nice costume! Enjoy trick-or-treating!"
+   - ANIMAL: Play scary sound file for 3 seconds
+   - VISITOR: Send silent notification to phone with image
+
+4. Home Assistant integration
+   - Create binary_sensor for doorbell activity
+   - Create automation to process doorbell events
+   - Show last visitor photo on HA dashboard
+   - Log all doorbell events to /mnt/ssd/logs/doorbell.log
+
+5. Cost control
+   - Use Sonnet (cheaper than Opus for images)
+   - Compress images to max 1024px before sending
+   - Budget: max $0.15 per doorbell ring
+   - Alert if exceeding budget
+
+6. Test with sample images
+   - Business person (suit + briefcase)
+   - Child in Halloween costume
+   - Animal (dog, cat, etc)
+   - Regular person
+   - Verify correct classification
+   - Test TTS responses
+
+Deliverable: Working doorbell webhook + HA automations with multi-scenario responses.

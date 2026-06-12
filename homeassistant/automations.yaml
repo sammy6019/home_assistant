@@ -64,4 +64,93 @@
       agent_id: conversation.ollama_conversation
     action: conversation.process
   mode: single
-  enabled: false
+
+- id: 'shark_vacuum_error_notify'
+  alias: Shark Vacuum Error Notification
+  description: Notify when shark vacuum encounters an error (e.g. bin full, stuck)
+  triggers:
+  - trigger: state
+    entity_id: vacuum.shark_robot_vacuum
+    to: 'error'
+  conditions: []
+  actions:
+  - action: notify.mobile_app_iphone
+    data:
+      title: "Shark Vacuum Error"
+      message: "Vacuum stopped: {{ state_attr('vacuum.shark_robot_vacuum', 'status') | default('unknown error') }}. Battery: {{ state_attr('vacuum.shark_robot_vacuum', 'battery_level') | default('?') }}%"
+      data:
+        actions:
+          - action: RESUME_VACUUM
+            title: Resume Cleaning
+  - action: system_log.write
+    data:
+      message: >
+        SHARK VACUUM ERROR: status={{ state_attr('vacuum.shark_robot_vacuum', 'status') }},
+        battery={{ state_attr('vacuum.shark_robot_vacuum', 'battery_level') }}%
+      level: warning
+  mode: single
+
+- id: 'shark_vacuum_resume_action'
+  alias: Shark Vacuum Resume from Notification
+  description: Resume vacuum when user taps Resume in notification
+  triggers:
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: RESUME_VACUUM
+  conditions: []
+  actions:
+  - action: vacuum.start
+    target:
+      entity_id: vacuum.shark_robot_vacuum
+  mode: single
+
+- id: 'shark_vacuum_bin_full_notify'
+  alias: Shark Vacuum Bin Full Notification
+  description: Notify when dust bin is full
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.shark_robot_vacuum_bin_full
+    to: 'on'
+  conditions: []
+  actions:
+  - action: notify.mobile_app_iphone
+    data:
+      title: "Shark Vacuum - Bin Full"
+      message: "Empty the dust bin then tap Resume to continue cleaning."
+      data:
+        actions:
+          - action: RESUME_VACUUM
+            title: Resume Cleaning
+  mode: single
+
+- id: 'doorbell_reset_active'
+  alias: Doorbell Reset Active Flag
+  description: Auto-clear doorbell active flag after 30 seconds
+  triggers:
+  - trigger: state
+    entity_id: input_boolean.doorbell_active
+    to: 'on'
+    for:
+      seconds: 30
+  conditions: []
+  actions:
+  - action: input_boolean.turn_off
+    data:
+      entity_id: input_boolean.doorbell_active
+  mode: single
+
+- id: 'doorbell_ring_trigger'
+  alias: Doorbell Ring - Trigger AI
+  description: When Vivint doorbell rings, POST snapshot to doorbell AI webhook
+  triggers:
+  - trigger: state
+    entity_id: event.doorbell_doorbell
+  - trigger: state
+    entity_id: binary_sensor.doorbell_motion
+    to: 'on'
+  conditions: []
+  actions:
+  - action: rest_command.doorbell_ai_trigger
+    data: {}
+  mode: single

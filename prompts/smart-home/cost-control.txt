@@ -1,0 +1,26 @@
+API Cost Management Strategy:
+
+1. Use Sonnet 4.6 (not Opus) for image analysis
+   - Cheaper: $0.003/$0.015 per 1K tokens
+   - Opus: $0.015/$0.075 per 1K tokens
+   - For images: Sonnet is 5x cheaper
+
+2. Compress images before sending
+   - Reduce resolution to 1024px max
+   - Saves ~50% tokens on vision tasks
+   - Still accurate for insect/person identification
+
+3. Cache repeated prompts
+   - Same prompt for doorbell detection? Cache it
+   - Reuse = free tokens
+
+4. Set per-operation limits
+   - Flood monitor: max $0.10 per image
+   - Doorbell: max $0.15 per ring
+   - If over, fail gracefully (use last known state)
+
+5. Daily budget tracking
+   - Log every API call: model, tokens, cost
+   - Alert if exceeding $3/day
+
+Deliverable: Cost-aware integration code with built-in budget checks.

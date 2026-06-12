@@ -1,0 +1,43 @@
+Audit and harden Home Assistant security on the Raspberry Pi.
+
+Review and report on:
+
+1. Firewall (UFW)
+   - Check current rules: sudo ufw status verbose
+   - Verify only necessary ports open (8123 for HA, 22 for SSH, etc.)
+   - Recommend closing unused ports
+
+2. SSH Security
+   - Verify SSH keys are in use (no password login)
+   - Check /home/pi/.ssh/authorized_keys
+   - Verify PermitRootLogin is disabled
+   - Review SSH config at /etc/ssh/sshd_config
+
+3. Home Assistant Access
+   - Check if HA has a strong admin password
+   - Review user accounts in HA
+   - Check if 2FA is enabled (if available)
+   - Verify API tokens are rotated
+
+4. Vaultwarden (if running)
+   - Verify it's not exposed to internet unnecessarily
+   - Check HTTPS/SSL is enabled
+   - Review admin access
+
+5. Network Access
+   - List what's accessible from outside via Cloudflare Tunnels
+   - Verify only intended services are exposed
+   - Check Cloudflare tunnel configuration
+
+6. Systemd Services
+   - List all running services: systemctl list-units --type=service
+   - Identify which should be running
+   - Recommend disabling unnecessary ones
+
+7. File Permissions
+   - Check /mnt/ssd/homeassistant/ permissions
+   - Verify secrets.yaml is properly restricted
+   - Check log files aren't world-readable
+
+Provide specific recommendations for each finding and priority level 
+(Critical/High/Medium/Low).

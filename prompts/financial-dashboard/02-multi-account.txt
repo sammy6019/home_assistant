@@ -1,0 +1,11 @@
+Expand financial dashboard to handle Schwab, Coinbase, and Robinhood.
+
+Add to /mnt/ssd/financial-dashboard/dashboard.py:
+
+1. Tabs for: Overview | Schwab | Coinbase | Robinhood
+2. File upload buttons for each account
+3. Overview tab: combined portfolio value, allocation, top 10 holdings
+4. Individual tabs: account-specific breakdowns
+5. Save all CSVs to /mnt/ssd/financial-dashboard/
+
+Test with sample uploads from all three accounts.

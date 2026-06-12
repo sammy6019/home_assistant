@@ -1,0 +1,38 @@
+Integrate Shark R2D22 vacuum into Home Assistant.
+
+Model: AV2310EDUS
+Serial: AV2310EDUS_K29ZS60...
+Issue: Vacuum stops after emptying dust bin and won't auto-resume. 
+       Need a dashboard button to manually resume cleaning.
+
+Steps:
+
+1. Install Shark HA Integration
+   - Add the SharkIQ integration to Home Assistant
+   - Use the Shark app credentials (stmcdonald76@gmail.com account)
+   - Authenticate and sync the R2D22 vacuum
+
+2. Create HA Entities for Shark
+   - Vacuum status (running/stopped/error/charging)
+   - Battery level
+   - Dust bin full status
+   - Resume/start/stop controls
+
+3. Create a Dashboard Card
+   - Add to /mnt/ssd/homeassistant/ui-lovelace.yaml
+   - Show vacuum status and last error message
+   - Big "RESUME CLEANING" button that triggers start_pause service
+   - Show battery % and dust bin status
+
+4. Create Automations
+   - When vacuum encounters error: send notification with error details
+   - Notification includes "Resume" button that triggers dashboard button
+   - Log all errors to /mnt/ssd/logs/shark-vacuum.log
+
+5. Test
+   - Verify R2D22 shows in HA
+   - Trigger an error manually (empty bucket mid-cycle)
+   - Click "Resume" button and confirm vacuum starts
+   - Check dashboard reflects status changes
+
+Deliverable: Working dashboard card with resume button + notification system.

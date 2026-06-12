@@ -3,6 +3,9 @@ import os
 import subprocess
 import fcntl
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+CHICAGO = ZoneInfo('America/Chicago')
 
 LOCK_FILE = '/tmp/flood_monitor.lock'
 
@@ -20,7 +23,7 @@ HA_URL = 'http://192.168.1.227:8123'
 
 def is_nighttime():
     """True between 10pm and 6am Central time"""
-    hour = int(datetime.now().strftime('%H'))
+    hour = int(datetime.now(CHICAGO).strftime('%H'))
     return hour >= 22 or hour < 6
 
 def is_raining():
@@ -59,7 +62,7 @@ def is_raining():
 
 if __name__ == '__main__':
     night = is_nighttime()
-    print(f'Time: {datetime.now().strftime("%H:%M")} | Nighttime mode: {night}')
+    print(f'Time: {datetime.now(CHICAGO).strftime("%H:%M %Z")} | Nighttime mode: {night}')
 
     if is_raining():
         print('RAINING - running flood monitor')

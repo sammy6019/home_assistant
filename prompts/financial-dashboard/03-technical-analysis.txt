@@ -1,0 +1,24 @@
+Add technical analysis layer to financial dashboard.
+
+For each holding calculate and explain simply:
+
+Technical Score (60% of composite):
+- RSI (0-100): "Above 70 = overbought (might fall)", "Below 30 = oversold (might rise)"
+- Moving averages: "Price above 50/200-day = uptrend", "Below = downtrend"
+- Trend strength: Visual chart showing price + MAs
+
+Fundamental Score (40% of composite):
+- P/E ratio: "18 vs sector avg 22 = cheaper than peers"
+- Earnings growth: "Growing 15% per year = healthy"
+- Dividend yield: "2.5% = pays you to hold"
+
+Composite Score (1-100):
+- 85-100 = "Strong Buy"
+- 70-85 = "Buy"
+- 50-70 = "Hold"
+- 30-50 = "Sell"
+- 0-30 = "Strong Sell"
+
+Use yfinance + Alpha Vantage for data. Show score breakdown.
+
+Test and display output.

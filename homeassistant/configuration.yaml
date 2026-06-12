@@ -36,6 +36,22 @@ http:
     - ::1
     - 192.168.1.227
 
+input_boolean:
+  doorbell_active:
+    name: Doorbell Active
+    icon: mdi:doorbell
+
+input_text:
+  doorbell_last_classification:
+    name: Doorbell Last Classification
+    initial: none
+
+rest_command:
+  doorbell_ai_trigger:
+    url: http://192.168.1.227:5001/doorbell
+    method: POST
+    timeout: 60
+
 shell_command:
   run_flood_monitor: "python3 /mnt/ssd/flood-monitor/flood_monitor.py"
 
@@ -67,3 +83,58 @@ rest:
           {% if events %}{{ events[-1].snapshot | default('') }}{% else %}{% endif %}
       - name: "Flood Event Count"
         value_template: "{{ value_json | length }}"
+
+  - scan_interval: 30
+    resource: http://192.168.1.227:5001/doorbell/last
+    sensor:
+      - name: "Doorbell Last Classification"
+        value_template: "{{ value_json.classification | default('none') }}"
+      - name: "Doorbell Last Event"
+        value_template: >
+          {% if value_json.timestamp %}{{ value_json.timestamp[:16] | replace('T', ' ') }}{% else %}never{% endif %}
+
+  - scan_interval: 300
+    resource: http://192.168.1.227:8001/api/portfolio/overview
+    sensor:
+      - name: "Finance Total Value"
+        value_template: "{{ value_json.total_value | round(2) }}"
+        unit_of_measurement: "USD"
+      - name: "Finance Total Gain Pct"
+        value_template: "{{ value_json.total_gain_pct | round(2) }}"
+        unit_of_measurement: "%"
+      - name: "Finance Day Change Pct"
+        value_template: "{{ value_json.total_day_pct | round(2) }}"
+        unit_of_measurement: "%"
+      - name: "Finance Day Change Dollar"
+        value_template: "{{ value_json.total_day_change | round(2) }}"
+        unit_of_measurement: "USD"
+
+  - scan_interval: 300
+    resource: http://192.168.1.227:8001/api/portfolio/schwab
+    sensor:
+      - name: "Schwab Total Value"
+        value_template: "{{ value_json.total_value | round(2) }}"
+        unit_of_measurement: "USD"
+      - name: "Schwab Day Change Pct"
+        value_template: "{{ value_json.day_change_pct | round(2) }}"
+        unit_of_measurement: "%"
+
+  - scan_interval: 300
+    resource: http://192.168.1.227:8001/api/portfolio/coinbase
+    sensor:
+      - name: "Coinbase Total Value"
+        value_template: "{{ value_json.total_value | round(2) }}"
+        unit_of_measurement: "USD"
+      - name: "Coinbase Day Change Pct"
+        value_template: "{{ value_json.day_change_pct | round(2) }}"
+        unit_of_measurement: "%"
+
+  - scan_interval: 300
+    resource: http://192.168.1.227:8001/api/portfolio/robinhood
+    sensor:
+      - name: "Robinhood Total Value"
+        value_template: "{{ value_json.total_value | round(2) }}"
+        unit_of_measurement: "USD"
+      - name: "Robinhood Day Change Pct"
+        value_template: "{{ value_json.day_change_pct | round(2) }}"
+        unit_of_measurement: "%"

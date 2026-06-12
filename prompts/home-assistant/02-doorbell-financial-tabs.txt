@@ -1,0 +1,49 @@
+Add Doorbell AI and Financial Dashboard tabs to Home Assistant.
+
+Add these sections to /mnt/ssd/homeassistant/ui-lovelace.yaml
+
+DOORBELL TAB:
+- Title: "Doorbell"
+- Show recent visitor photo + timestamp
+- Classification badge: BUSINESS | HALLOWEEN_KIDS | ANIMAL | VISITOR
+- Classification color: Red (business), Orange (animal), Green (visitor), Blue (halloween)
+- Recent visitors list (last 10):
+  - Photo thumbnail
+  - Classification type
+  - Time/date detected
+  - TTS response played
+- Counts for today: 
+  - Total visitors
+  - Business attempts
+  - Animals scared
+  - Valid visitors
+
+FINANCIAL DASHBOARD TAB:
+- Title: "Finances"
+- Portfolio tabs: Schwab | Coinbase | Robinhood | Overview
+
+Schwab section:
+- Total value
+- Daily % change + color (red/green)
+- Holdings table (ticker, price, qty, value, % change)
+- Top holdings pie chart
+- Performance chart (30 days)
+- AI analyst insights (if available)
+
+Coinbase section:
+- Total crypto value
+- Holdings list (coin, price, qty, value, % change)
+- Performance chart
+
+Robinhood section:
+- Total value
+- Holdings list
+- Performance chart
+
+Overview section:
+- Combined portfolio value (all accounts)
+- Asset allocation (Stocks | Crypto | ETFs)
+- Daily/YTD performance across all accounts
+- Top 10 holdings by value
+
+Keep both tabs styled consistently with rest of HA dashboard.

@@ -1,0 +1,22 @@
+Build a financial dashboard web server with file upload for Charles Schwab CSV.
+
+Create /mnt/ssd/financial-dashboard/dashboard.py that:
+
+1. Starts a Flask web server on port 5000
+2. Shows a clean dashboard interface with:
+   - File upload button labeled "Upload Schwab CSV"
+   - Portfolio Summary (total value, cash, daily/YTD % gain/loss)
+   - Holdings Breakdown (pie chart by sector, top 5 holdings)
+   - Individual Holdings Table (ticker, price, qty, value, gain/loss, %)
+
+3. When CSV is uploaded:
+   - Parse Schwab CSV format
+   - Extract holdings data
+   - Update dashboard in real-time
+   - Save parsed data to /mnt/ssd/financial-dashboard/latest_portfolio.json
+
+4. Make dashboard accessible at http://192.168.1.227:5000
+
+Include error handling for malformed CSVs.
+
+Test by exporting a CSV from Schwab and uploading through the dashboard.

@@ -4,7 +4,10 @@ services:
     container_name: flood-api
     restart: unless-stopped
     network_mode: host
+    environment:
+      - TZ=America/Chicago
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /mnt/ssd/flood-monitor/logs:/mnt/ssd/flood-monitor/logs
       - /mnt/ssd/flood-monitor/snapshots:/mnt/ssd/flood-monitor/snapshots
       - /mnt/ssd/flood-monitor/flood_monitor.py:/mnt/ssd/flood-monitor/flood_monitor.py

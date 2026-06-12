@@ -2,7 +2,11 @@ import os
 import json
 import base64
 import requests
+import anthropic
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+CHICAGO = ZoneInfo('America/Chicago')
 import logging
 import time
 
@@ -15,14 +19,18 @@ SNAPSHOT_RETENTION_DAYS = 30
 ALERT_COOLDOWN_MINUTES = 30
 COOLDOWN_FILE = f'{LOG_DIR}/.last_alert'
 
-# Load token from environment or .env file
+# Load tokens from environment or .env file
 HA_TOKEN = os.environ.get('HA_TOKEN')
-if not HA_TOKEN:
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+if not HA_TOKEN or not ANTHROPIC_API_KEY:
     try:
         with open('/mnt/ssd/flood-monitor/.env') as f:
             for line in f:
-                if line.startswith('HA_TOKEN='):
-                    HA_TOKEN = line.strip().split('=', 1)[1]
+                k, _, v = line.strip().partition('=')
+                if k == 'HA_TOKEN' and not HA_TOKEN:
+                    HA_TOKEN = v
+                elif k == 'ANTHROPIC_API_KEY' and not ANTHROPIC_API_KEY:
+                    ANTHROPIC_API_KEY = v
     except Exception as e:
         print(f'Warning: Failed to load .env: {e}')
 
@@ -42,7 +50,7 @@ VIVINT_CAMERAS = [
 # ── Logging ──────────────────────────────────────────────────────────────────
 class LocalTimezoneFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
-        ct = datetime.fromtimestamp(record.created).astimezone()
+        ct = datetime.fromtimestamp(record.created, tz=CHICAGO)
         return ct.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 handler = logging.FileHandler(LOG_FILE)
@@ -57,7 +65,7 @@ def get_snapshot(entity_id, label):
     For Vivint cameras, first trigger a snapshot service call to wake the cloud
     stream, then immediately fetch via proxy."""
     try:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(CHICAGO).strftime('%Y%m%d_%H%M%S')
         snapshot_path = f'{SNAPSHOT_DIR}/snapshot_{label}_{timestamp}.jpg'
 
         if entity_id != PRIMARY_CAMERA['entity']:
@@ -119,7 +127,7 @@ def cleanup_old_snapshots():
     except Exception as e:
         logging.warning(f'Snapshot cleanup failed: {e}')
 
-# ── Ollama Analysis ───────────────────────────────────────────────────────────
+# ── Claude Vision Analysis ────────────────────────────────────────────────────
 def analyze_ditch(image_path):
     """Analyze ditch image for water level vs fluorescent orange numbered markers."""
     prompt = """You are a flood detection system analyzing a drainage ditch camera image.
@@ -168,28 +176,38 @@ Start with: LEVEL: (none/low/medium/high/critical)
     last_error = None
     for attempt in range(2):
         try:
-            response = requests.post(
-                'http://localhost:11434/api/generate',
-                json={
-                    'model': 'llava',
-                    'prompt': prompt,
-                    'images': [image_data],
-                    'stream': False,
-                    'keep_alive': 300
-                },
-                timeout=480
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            message = client.messages.create(
+                model='claude-haiku-4-5',
+                max_tokens=512,
+                messages=[{
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'image',
+                            'source': {
+                                'type': 'base64',
+                                'media_type': 'image/jpeg',
+                                'data': image_data,
+                            }
+                        },
+                        {
+                            'type': 'text',
+                            'text': prompt
+                        }
+                    ]
+                }]
             )
-            response.raise_for_status()
-            analysis = response.json()['response'].strip()
+            analysis = message.content[0].text.strip()
             logging.info(f'Analysis: {analysis}')
             return analysis
         except Exception as e:
             last_error = e
-            logging.warning(f'Ollama attempt {attempt + 1} failed: {e}')
+            logging.warning(f'Claude API attempt {attempt + 1} failed: {e}')
             if attempt < 1:
-                time.sleep(10)
+                time.sleep(5)
 
-    logging.error(f'Ollama failed after 2 attempts: {last_error}')
+    logging.error(f'Claude API failed after 2 attempts: {last_error}')
     return None
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -353,7 +371,7 @@ def run_monitor():
 
     # ── Step 4: Write log entry ──────────────────────────────────
     log_entry = {
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(CHICAGO).isoformat(),
         'snapshot': ditch_snapshot,
         'analysis': analysis,
         'flood_detected': alert,

@@ -1,0 +1,17 @@
+services:
+  doorbell-ai:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: doorbell-ai
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/ssd/doorbell/logs:/mnt/ssd/doorbell/logs
+      - /mnt/ssd/doorbell/captures:/mnt/ssd/doorbell/captures
+      - /mnt/ssd/doorbell/doorbell_server.py:/app/doorbell_server.py
+      - /mnt/ssd/doorbell/.env:/mnt/ssd/doorbell/.env
+      - /mnt/ssd/homeassistant/www:/mnt/ssd/homeassistant/www

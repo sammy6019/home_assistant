@@ -1,0 +1,136 @@
+title: Home
+views:
+  - title: Shark Vacuum
+    path: shark
+    icon: mdi:robot-vacuum
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entity
+            entity: vacuum.shark_robot_vacuum
+            name: Shark R2D22
+            icon: mdi:robot-vacuum
+
+          - type: glance
+            entities:
+              - entity: vacuum.shark_robot_vacuum
+                name: Status
+                attribute: status
+              - entity: vacuum.shark_robot_vacuum
+                name: Battery
+                attribute: battery_level
+              - entity: binary_sensor.shark_robot_vacuum_bin_full
+                name: Bin Full
+
+          - type: button
+            name: RESUME CLEANING
+            icon: mdi:play-circle
+            tap_action:
+              action: call-service
+              service: vacuum.start
+              target:
+                entity_id: vacuum.shark_robot_vacuum
+            show_name: true
+            show_icon: true
+
+          - type: markdown
+            content: >
+              **Status:** {{ state_attr('vacuum.shark_robot_vacuum', 'status') | default('unknown') }}
+
+              **Battery:** {{ state_attr('vacuum.shark_robot_vacuum', 'battery_level') | default('?') }}%
+
+              **Bin Full:** {{ states('binary_sensor.shark_robot_vacuum_bin_full') | title }}
+
+  - title: Doorbell
+    path: doorbell
+    icon: mdi:doorbell-video
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: picture
+            image: /local/doorbell_last.jpg
+            alt_text: Last visitor capture
+
+          - type: markdown
+            content: >
+              {% set c = states('sensor.doorbell_last_classification') %}
+              {% set t = states('sensor.doorbell_last_event') %}
+              {% if c == 'BUSINESS' %}
+              <ha-icon icon="mdi:briefcase"></ha-icon> **<span style="color:red">BUSINESS</span>** — TTS: "Sorry, not interested in sales."
+              {% elif c == 'HALLOWEEN_KIDS' %}
+              <ha-icon icon="mdi:ghost"></ha-icon> **<span style="color:#4fc3f7">HALLOWEEN KIDS</span>** — TTS: "Nice costume! Enjoy trick-or-treating!"
+              {% elif c == 'ANIMAL' %}
+              <ha-icon icon="mdi:paw"></ha-icon> **<span style="color:orange">ANIMAL</span>** — Played scary sound
+              {% elif c == 'VISITOR' %}
+              <ha-icon icon="mdi:account"></ha-icon> **<span style="color:green">VISITOR</span>** — Notification sent
+              {% else %}
+              No visitors yet
+              {% endif %}
+
+              **Detected:** {{ t }}
+
+          - type: glance
+            title: Last Visitor
+            entities:
+              - entity: sensor.doorbell_last_classification
+                name: Classification
+              - entity: sensor.doorbell_last_event
+                name: Time
+              - entity: input_boolean.doorbell_active
+                name: Active Now
+
+          - type: markdown
+            title: Today's Activity
+            content: >
+              | Category | Count |
+              |---|---|
+              | Total Visitors | — |
+              | Business Turned Away | — |
+              | Animals Scared | — |
+              | Valid Visitors | — |
+
+              *Full history in* `/mnt/ssd/doorbell/logs/history.json`
+
+  - title: Finances
+    path: finances
+    icon: mdi:chart-line
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ## Portfolio Overview
+              {% set total = states('sensor.finance_total_value') | float(0) %}
+              {% set day_pct = states('sensor.finance_day_change_pct') | float(0) %}
+              {% set day_dollar = states('sensor.finance_day_change_dollar') | float(0) %}
+              {% set gain_pct = states('sensor.finance_total_gain_pct') | float(0) %}
+
+              **Total Value:** ${{ '{:,.2f}'.format(total) }}
+
+              **Today:** {% if day_pct >= 0 %}<span style="color:green">▲ +${{ '{:,.2f}'.format(day_dollar) }} (+{{ day_pct }}%)</span>{% else %}<span style="color:red">▼ ${{ '{:,.2f}'.format(day_dollar) }} ({{ day_pct }}%)</span>{% endif %}
+
+              **Total Gain:** {% if gain_pct >= 0 %}<span style="color:green">+{{ gain_pct }}%</span>{% else %}<span style="color:red">{{ gain_pct }}%</span>{% endif %}
+
+          - type: glance
+            title: Accounts
+            entities:
+              - entity: sensor.schwab_total_value
+                name: Schwab
+              - entity: sensor.coinbase_total_value
+                name: Coinbase
+              - entity: sensor.robinhood_total_value
+                name: Robinhood
+
+          - type: markdown
+            title: Daily Change by Account
+            content: >
+              | Account | Day Change |
+              |---|---|
+              | Schwab | {% set p = states('sensor.schwab_day_change_pct') | float(0) %}{% if p >= 0 %}<span style="color:green">+{{ p }}%</span>{% else %}<span style="color:red">{{ p }}%</span>{% endif %} |
+              | Coinbase | {% set p = states('sensor.coinbase_day_change_pct') | float(0) %}{% if p >= 0 %}<span style="color:green">+{{ p }}%</span>{% else %}<span style="color:red">{{ p }}%</span>{% endif %} |
+              | Robinhood | {% set p = states('sensor.robinhood_day_change_pct') | float(0) %}{% if p >= 0 %}<span style="color:green">+{{ p }}%</span>{% else %}<span style="color:red">{{ p }}%</span>{% endif %} |
+
+          - type: iframe
+            url: http://192.168.1.227:3001
+            aspect_ratio: 100%
+            title: Full Finance Dashboard

@@ -1,0 +1,17 @@
+Add daily AI analyst report using Ollama.
+
+Generate plain-English summaries explaining:
+- Top 3 buys this week (and why)
+- Holdings that are overbought/oversold
+- Portfolio rebalancing suggestions
+- Dividend opportunities
+- Tax-loss harvesting alerts
+
+Use simple analogies:
+- "RSI 75 is like a stock that's run too far, too fast"
+- "P/E ratio is the price you pay for each $1 of earnings"
+- "Moving average is the stock's trend direction"
+
+Use Ollama to write the report. Display with explanations next to metrics.
+
+Test with sample holdings.
