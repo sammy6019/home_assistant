@@ -1,45 +1,198 @@
 title: Home
 views:
-  - title: Shark Vacuum
-    path: shark
-    icon: mdi:robot-vacuum
+  - title: Flood Monitor
+    path: flood
+    icon: mdi:water-alert
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.flood_water_level
+            name: Water Level
+            icon: mdi:waves
+          - type: entity
+            entity: sensor.flood_monitor_running
+            name: Monitor Status
+            icon: mdi:eye
+          - type: entity
+            entity: sensor.flood_last_check
+            name: Last Check
+            icon: mdi:clock-outline
+          - type: entity
+            entity: sensor.flood_event_count
+            name: Total Checks
+            icon: mdi:counter
+
+      - type: picture-glance
+        title: Ditch Camera (Ring)
+        entity: camera.garden_live_view
+        camera_image: camera.garden_live_view
+        camera_view: live
+        entities:
+          - entity: sensor.garden_battery
+            icon: mdi:battery
+          - entity: switch.garden_motion_detection
+            icon: mdi:motion-sensor
+          - entity: sensor.garden_last_activity
+            icon: mdi:clock
+
+      - type: entities
+        title: Ring Camera Status
+        entities:
+          - entity: sensor.garden_battery
+            name: Battery
+          - entity: sensor.garden_last_activity
+            name: Last Activity
+          - entity: switch.garden_motion_detection
+            name: Motion Detection
+          - entity: event.garden_motion
+            name: Last Motion
+
+      - type: entities
+        title: Flood Monitor Controls
+        entities:
+          - entity: sensor.flood_water_level
+            name: Current Level
+          - entity: sensor.flood_alert_active
+            name: Alert Active
+          - entity: sensor.flood_last_check
+            name: Last Check
+          - entity: sensor.flood_monitor_running
+            name: Monitor State
+          - type: button
+            name: Trigger Manual Check
+            action_name: Run Now
+            tap_action:
+              action: call-service
+              service: shell_command.run_flood_monitor
+
+      - type: horizontal-stack
+        cards:
+          - type: picture-entity
+            title: Doorbell
+            entity: camera.doorbell
+            camera_view: live
+            show_name: true
+            show_state: false
+          - type: picture-entity
+            title: Backyard
+            entity: camera.backyard
+            camera_view: live
+            show_name: true
+            show_state: false
+          - type: picture-entity
+            title: Driveway
+            entity: camera.driveway
+            camera_view: live
+            show_name: true
+            show_state: false
+
+  - title: Home Lab
+    path: homelab
+    icon: mdi:server
     cards:
       - type: vertical-stack
         cards:
-          - type: entity
-            entity: vacuum.shark_robot_vacuum
-            name: Shark R2D22
-            icon: mdi:robot-vacuum
-
-          - type: glance
-            entities:
-              - entity: vacuum.shark_robot_vacuum
-                name: Status
-                attribute: status
-              - entity: vacuum.shark_robot_vacuum
-                name: Battery
-                attribute: battery_level
-              - entity: binary_sensor.shark_robot_vacuum_bin_full
-                name: Bin Full
-
-          - type: button
-            name: RESUME CLEANING
-            icon: mdi:play-circle
-            tap_action:
-              action: call-service
-              service: vacuum.start
-              target:
-                entity_id: vacuum.shark_robot_vacuum
-            show_name: true
-            show_icon: true
-
           - type: markdown
-            content: >
-              **Status:** {{ state_attr('vacuum.shark_robot_vacuum', 'status') | default('unknown') }}
+            content: "## 🌡️ Climate"
+          - type: horizontal-stack
+            cards:
+              - type: thermostat
+                entity: climate.living_room
+                name: Nest Thermostat
+              - type: glance
+                title: Readings
+                entities:
+                  - entity: sensor.living_room_temperature
+                    name: Temperature
+                  - entity: sensor.living_room_humidity
+                    name: Humidity
 
-              **Battery:** {{ state_attr('vacuum.shark_robot_vacuum', 'battery_level') | default('?') }}%
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## 📷 All Cameras"
+          - type: picture-glance
+            title: Ditch (Ring)
+            entity: camera.garden_live_view
+            camera_image: camera.garden_live_view
+            camera_view: live
+            entities: []
+          - type: horizontal-stack
+            cards:
+              - type: picture-entity
+                title: Doorbell
+                entity: camera.doorbell
+                camera_view: live
+                show_name: true
+                show_state: false
+              - type: picture-entity
+                title: Backyard
+                entity: camera.backyard
+                camera_view: live
+                show_name: true
+                show_state: false
+              - type: picture-entity
+                title: Driveway
+                entity: camera.driveway
+                camera_view: live
+                show_name: true
+                show_state: false
 
-              **Bin Full:** {{ states('binary_sensor.shark_robot_vacuum_bin_full') | title }}
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## 🖥️ System Health"
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.disk_usage_percent
+                name: Disk
+                min: 0
+                max: 100
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+              - type: gauge
+                entity: sensor.memory_usage_percent
+                name: Memory
+                min: 0
+                max: 100
+                severity:
+                  green: 0
+                  yellow: 75
+                  red: 90
+              - type: entity
+                entity: sensor.available_storage
+                name: Free Storage
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## ⚙️ Services"
+          - type: entities
+            title: Automations
+            entities:
+              - entity: automation.disk_space_warning
+                name: Disk Warning
+              - entity: automation.memory_usage_warning
+                name: Memory Warning
+              - entity: automation.nest_low_temperature_alert
+                name: Low Temp Alert
+          - type: entities
+            title: Flood Monitor
+            entities:
+              - entity: sensor.flood_monitor_running
+                name: Status
+              - entity: sensor.flood_water_level
+                name: Water Level
+              - entity: sensor.flood_last_check
+                name: Last Check
+
+      - type: alarm-panel
+        entity: alarm_control_panel.sam_mcdonald_s_house
+        name: Vivint Alarm
 
   - title: Doorbell
     path: doorbell
@@ -47,6 +200,17 @@ views:
     cards:
       - type: vertical-stack
         cards:
+          - type: picture-glance
+            title: Doorbell Camera (Live)
+            entity: camera.doorbell
+            camera_image: camera.doorbell
+            camera_view: live
+            entities:
+              - entity: binary_sensor.doorbell_motion
+                icon: mdi:motion-sensor
+              - entity: input_boolean.doorbell_active
+                icon: mdi:doorbell
+
           - type: picture
             image: /local/doorbell_last.jpg
             alt_text: Last visitor capture
@@ -78,18 +242,6 @@ views:
                 name: Time
               - entity: input_boolean.doorbell_active
                 name: Active Now
-
-          - type: markdown
-            title: Today's Activity
-            content: >
-              | Category | Count |
-              |---|---|
-              | Total Visitors | — |
-              | Business Turned Away | — |
-              | Animals Scared | — |
-              | Valid Visitors | — |
-
-              *Full history in* `/mnt/ssd/doorbell/logs/history.json`
 
   - title: Finances
     path: finances
