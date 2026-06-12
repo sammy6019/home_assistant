@@ -2,12 +2,14 @@
 
 import logging
 import os
+from collections.abc import Callable
+from datetime import datetime
 
 from aiohttp import ClientResponseError
 from aiohttp.client_exceptions import ClientConnectorError
 from vivintpy.devices import VivintDevice
 from vivintpy.devices.alarm_panel import DEVICE_DELETED, DEVICE_DISCOVERED
-from vivintpy.devices.camera import DOORBELL_DING, MOTION_DETECTED, Camera
+from vivintpy.devices.camera import DOORBELL_DING, MOTION_DETECTED, THUMBNAIL_READY, Camera
 from vivintpy.devices.wireless_sensor import WirelessSensor
 from vivintpy.enums import CapabilityCategoryType
 from vivintpy.exceptions import (
@@ -99,6 +101,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: VivintConfigEntry) -> bo
             },
         )
 
+    async def _handle_doorbell_thumbnail(cam_device: Camera) -> None:
+        """Download Vivint doorbell thumbnail and POST to AI server."""
+        import aiohttp
+        from vivintpy.const import CameraAttribute
+        try:
+            # Replicate get_thumbnail_url() but handle timestamps with or without milliseconds
+            raw_date = cam_device.data.get(CameraAttribute.CAMERA_THUMBNAIL_DATE, "").replace("Z", "")
+            for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    thumbnail_timestamp = int(datetime.strptime(raw_date, fmt).timestamp() * 1000)
+                    break
+                except ValueError:
+                    continue
+            else:
+                _LOGGER.error("Could not parse thumbnail date: %s", raw_date)
+                return
+            thumbnail_url = await cam_device.api.get_camera_thumbnail_url(
+                cam_device.alarm_panel.id,
+                cam_device.alarm_panel.partition_id,
+                cam_device.id,
+                thumbnail_timestamp,
+            )
+            if not thumbnail_url:
+                _LOGGER.warning("Vivint thumbnail URL was empty")
+                return
+            async with aiohttp.ClientSession() as session:
+                async with session.get(thumbnail_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status != 200:
+                        _LOGGER.error("Failed to download thumbnail: %s", resp.status)
+                        return
+                    image_bytes = await resp.read()
+                www_path = hass.config.path("www/doorbell_snap.jpg")
+                await hass.async_add_executor_job(
+                    lambda: open(www_path, "wb").write(image_bytes)
+                )
+                form = aiohttp.FormData()
+                form.add_field("image", image_bytes, content_type="image/jpeg", filename="doorbell.jpg")
+                async with session.post(
+                    "http://127.0.0.1:5001/doorbell",
+                    data=form,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as post_resp:
+                    _LOGGER.info("Doorbell AI server responded: %s", post_resp.status)
+        except Exception as ex:
+            _LOGGER.error("Doorbell thumbnail handler failed: %s", ex)
+
     for system in hub.account.systems:
         for alarm_panel in system.alarm_panels:
             entry.async_on_unload(
@@ -130,6 +178,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: VivintConfigEntry) -> bo
                                 DOORBELL_DING, event["device"]
                             ),
                         )
+                    )
+
+                    def _make_thumbnail_callback(cam_device: Camera) -> Callable:
+                        @callback
+                        def _on_thumbnail_ready(_event_data: dict) -> None:
+                            hass.async_create_task(_handle_doorbell_thumbnail(cam_device))
+                        return _on_thumbnail_ready
+
+                    entry.async_on_unload(
+                        device.on(THUMBNAIL_READY, _make_thumbnail_callback(device))
                     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

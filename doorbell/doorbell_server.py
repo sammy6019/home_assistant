@@ -5,7 +5,7 @@ import base64
 import logging
 import requests
 import anthropic
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask import Flask, request, jsonify
 from PIL import Image
@@ -176,25 +176,51 @@ def trigger_response(classification: str, capture_path: str):
 def doorbell_webhook():
     logger.info('Doorbell webhook received')
 
-    if 'image' not in request.files and not request.data:
-        # Try to grab snapshot from HA camera directly
-        try:
-            img_resp = requests.get(
-                f'{HA_URL}/api/camera_proxy/camera.doorbell',
-                headers={'Authorization': f'Bearer {HA_TOKEN}'},
-                timeout=30
-            )
-            if img_resp.status_code != 200 or 'image' not in img_resp.headers.get('Content-Type', ''):
-                logger.error('Failed to get doorbell snapshot from HA')
-                return jsonify({'error': 'no image'}), 400
-            image_bytes = img_resp.content
-        except Exception as e:
-            logger.error(f'Failed to fetch HA camera snapshot: {e}')
-            return jsonify({'error': str(e)}), 500
-    elif 'image' in request.files:
+    image_bytes = None
+    if 'image' in request.files:
         image_bytes = request.files['image'].read()
-    else:
+    elif request.data:
         image_bytes = request.data
+    else:
+        # Vivint cameras don't support HA's camera_proxy — try camera.snapshot service
+        try:
+            snap_resp = requests.post(
+                f'{HA_URL}/api/services/camera/snapshot',
+                headers={'Authorization': f'Bearer {HA_TOKEN}', 'Content-Type': 'application/json'},
+                json={'entity_id': 'camera.doorbell', 'filename': '/config/www/doorbell_snap.jpg'},
+                timeout=10
+            )
+            if snap_resp.status_code in (200, 201):
+                import time; time.sleep(1)
+                img_resp = requests.get(
+                    f'{HA_URL}/local/doorbell_snap.jpg',
+                    headers={'Authorization': f'Bearer {HA_TOKEN}'},
+                    timeout=10
+                )
+                if img_resp.status_code == 200 and 'image' in img_resp.headers.get('Content-Type', ''):
+                    image_bytes = img_resp.content
+        except Exception as e:
+            logger.warning(f'Snapshot fetch attempt failed: {e}')
+
+        if not image_bytes:
+            logger.warning('No image available from Vivint camera — notifying without classification')
+            ha_call('notify', 'mobile_app_iphone', {
+                'title': 'Doorbell',
+                'message': f'Someone at the door — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
+                'data': {
+                    'push': {'sound': 'default'},
+                    'image': '/local/doorbell_last.jpg',
+                }
+            })
+            ha_call('input_boolean', 'turn_on', {'entity_id': 'input_boolean.doorbell_active'})
+            event = {
+                'timestamp': datetime.now(CHICAGO).isoformat(),
+                'capture': None,
+                'classification': 'UNCLASSIFIED',
+            }
+            with open('/mnt/ssd/doorbell/logs/history.json', 'a') as f:
+                f.write(json.dumps(event) + '\n')
+            return jsonify({'status': 'ok', 'classification': 'UNCLASSIFIED'})
 
     # Save timestamped capture
     timestamp = datetime.now(CHICAGO).strftime('%Y%m%d_%H%M%S')
@@ -202,11 +228,19 @@ def doorbell_webhook():
     with open(capture_path, 'wb') as f:
         f.write(image_bytes)
 
-    # Save as last capture for HA dashboard (symlink-style overwrite)
+    # Save as last capture for HA dashboard
     with open(LAST_CAPTURE_FILE, 'wb') as f:
         f.write(image_bytes)
 
     logger.info(f'Saved capture: {capture_path}')
+
+    # Delete captures older than 7 days
+    cutoff = datetime.now() - timedelta(days=7)
+    for fname in os.listdir(CAPTURE_DIR):
+        fpath = os.path.join(CAPTURE_DIR, fname)
+        if os.path.getmtime(fpath) < cutoff.timestamp():
+            os.remove(fpath)
+            logger.info(f'Deleted old capture: {fname}')
 
     classification = classify_visitor(image_bytes)
     logger.info(f'Classification: {classification}')

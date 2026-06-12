@@ -142,15 +142,12 @@
 
 - id: 'doorbell_ring_trigger'
   alias: Doorbell Ring - Trigger AI
-  description: When Vivint doorbell rings, POST snapshot to doorbell AI webhook
+  description: Disabled - thumbnail handler in vivint/__init__.py now POSTs directly with image
   triggers:
   - trigger: state
     entity_id: event.doorbell_doorbell
-  - trigger: state
-    entity_id: binary_sensor.doorbell_motion
-    to: 'on'
-  conditions: []
-  actions:
-  - action: rest_command.doorbell_ai_trigger
-    data: {}
+  conditions:
+  - condition: template
+    value_template: 'false'
+  actions: []
   mode: single
