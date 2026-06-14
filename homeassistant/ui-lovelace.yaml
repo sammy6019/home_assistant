@@ -24,9 +24,9 @@ views:
             icon: mdi:counter
 
       - type: picture-glance
-        title: Doorbell Camera
-        entity: camera.doorbell
-        camera_image: camera.doorbell
+        title: Garden Camera
+        entity: camera.garden_live_view
+        camera_image: camera.garden_live_view
         camera_view: live
         entities:
           - entity: sensor.garden_battery
@@ -76,6 +76,438 @@ views:
             show_name: true
             show_state: false
 
+  - title: "\U0001F37D️ Kitchen"
+    path: kitchen
+    icon: mdi:silverware-fork-knife
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F9CA Ice Maker"
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: sensor.govee_ice_maker_water_shortage
+                name: Water Status
+                icon: mdi:water
+              - type: entity
+                entity: binary_sensor.govee_ice_maker_running
+                name: Running
+                icon: mdi:snowflake
+              - type: entity
+                entity: switch.govee_ice_maker
+                name: Power
+                icon: mdi:power
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F37D️ Dishwasher"
+          - type: entities
+            title: Bosch Dishwasher
+            entities:
+              - entity: sensor.bosch_dishwasher_operation_state
+                name: Status
+                icon: mdi:dishwasher
+              - entity: sensor.bosch_dishwasher_remaining_program_time
+                name: Time Remaining
+                icon: mdi:timer
+              - entity: sensor.bosch_dishwasher_program_progress
+                name: Progress
+                icon: mdi:progress-clock
+              - entity: sensor.bosch_dishwasher_selected_program
+                name: Program
+                icon: mdi:format-list-bulleted
+          - type: button
+            name: Start Dishwasher
+            icon: mdi:play-circle
+            tap_action:
+              action: call-service
+              service: home_connect.start_program
+              service_data:
+                entity_id: sensor.bosch_dishwasher_operation_state
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F3B5 Kitchen Speaker"
+          - type: media-control
+            entity: media_player.sonos_kitchen
+
+  - title: "\U0001F6CC Bedroom"
+    path: bedroom
+    icon: mdi:bed
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F6CF️ Sleep Number Bed"
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: number.sleepnumber_left_firmness
+                name: Left Side
+                icon: mdi:bed
+              - type: entity
+                entity: number.sleepnumber_right_firmness
+                name: Right Side
+                icon: mdi:bed
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Sleep Position
+                icon: mdi:weather-night
+                tap_action:
+                  action: call-service
+                  service: script.sleep_number_sleep_position
+              - type: button
+                name: Watch TV
+                icon: mdi:television
+                tap_action:
+                  action: call-service
+                  service: script.sleep_number_tv_position
+              - type: button
+                name: Read
+                icon: mdi:book-open
+                tap_action:
+                  action: call-service
+                  service: script.sleep_number_read_position
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4A1 Bedroom Lights"
+          - type: light
+            entity: light.hue_bedroom
+            name: Bedroom Lights
+          - type: entities
+            entities:
+              - entity: light.hue_bedroom_1
+                name: Lamp Left
+              - entity: light.hue_bedroom_2
+                name: Lamp Right
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F3B5 Bedroom Speaker"
+          - type: media-control
+            entity: media_player.sonos_bedroom
+
+  - title: "\U0001F6CB️ Living Room"
+    path: living-room
+    icon: mdi:sofa
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4FA LG OLED TV"
+          - type: media-control
+            entity: media_player.lg_oled_tv
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Power
+                icon: mdi:power
+                tap_action:
+                  action: call-service
+                  service: media_player.toggle
+                  service_data:
+                    entity_id: media_player.lg_oled_tv
+              - type: button
+                name: HDMI 1
+                icon: mdi:hdmi-port
+                tap_action:
+                  action: call-service
+                  service: media_player.select_source
+                  service_data:
+                    entity_id: media_player.lg_oled_tv
+                    source: HDMI 1
+              - type: button
+                name: HDMI 2
+                icon: mdi:hdmi-port
+                tap_action:
+                  action: call-service
+                  service: media_player.select_source
+                  service_data:
+                    entity_id: media_player.lg_oled_tv
+                    source: HDMI 2
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F50A Sonos Speakers"
+          - type: media-control
+            entity: media_player.sonos_living_room
+          - type: entities
+            title: All Zones
+            entities:
+              - entity: media_player.sonos_living_room
+                name: Living Room
+              - entity: media_player.sonos_kitchen
+                name: Kitchen
+              - entity: media_player.sonos_bedroom
+                name: Bedroom
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Pause All
+                icon: mdi:pause-circle
+                tap_action:
+                  action: call-service
+                  service: media_player.media_pause
+                  service_data:
+                    entity_id:
+                      - media_player.sonos_living_room
+                      - media_player.sonos_kitchen
+                      - media_player.sonos_bedroom
+              - type: button
+                name: Resume All
+                icon: mdi:play-circle
+                tap_action:
+                  action: call-service
+                  service: media_player.media_play
+                  service_data:
+                    entity_id:
+                      - media_player.sonos_living_room
+                      - media_player.sonos_kitchen
+                      - media_player.sonos_bedroom
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F50C Kasa Smart Plugs"
+          - type: entities
+            title: Indoor Plugs
+            entities:
+              - entity: switch.kasa_plug_1
+                name: Plug 1
+                icon: mdi:power-socket
+              - entity: switch.kasa_plug_2
+                name: Plug 2
+                icon: mdi:power-socket
+              - entity: switch.kasa_plug_3
+                name: Plug 3
+                icon: mdi:power-socket
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4A1 Hue Lights"
+          - type: light
+            entity: light.hue_living_room
+            name: Living Room Lights
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Movie Mode
+                icon: mdi:movie
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  service_data:
+                    entity_id: scene.movie_mode
+              - type: button
+                name: Relax
+                icon: mdi:sofa
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  service_data:
+                    entity_id: scene.relax
+              - type: button
+                name: Bright
+                icon: mdi:weather-sunny
+                tap_action:
+                  action: call-service
+                  service: scene.turn_on
+                  service_data:
+                    entity_id: scene.bright
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F3AC Scenes"
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Movie Mode
+                icon: mdi:movie-open
+                tap_action:
+                  action: call-service
+                  service: script.movie_mode
+              - type: button
+                name: Good Morning
+                icon: mdi:weather-sunrise
+                tap_action:
+                  action: call-service
+                  service: script.good_morning
+              - type: button
+                name: Bedtime
+                icon: mdi:weather-night
+                tap_action:
+                  action: call-service
+                  service: script.bedtime
+
+  - title: "\U0001F333 Outdoor"
+    path: outdoor
+    icon: mdi:home-outdoor
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F50C Kasa Outdoor Plugs"
+          - type: entities
+            title: Outdoor Plugs
+            entities:
+              - entity: switch.kasa_outdoor_plug_1
+                name: Patio Lights
+                icon: mdi:string-lights
+              - entity: switch.kasa_outdoor_plug_2
+                name: Garden Lights
+                icon: mdi:flower
+              - entity: switch.kasa_outdoor_plug_3
+                name: Outlet 3
+                icon: mdi:power-socket
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: All On
+                icon: mdi:lightbulb-group
+                tap_action:
+                  action: call-service
+                  service: switch.turn_on
+                  service_data:
+                    entity_id:
+                      - switch.kasa_outdoor_plug_1
+                      - switch.kasa_outdoor_plug_2
+                      - switch.kasa_outdoor_plug_3
+              - type: button
+                name: All Off
+                icon: mdi:lightbulb-group-off
+                tap_action:
+                  action: call-service
+                  service: switch.turn_off
+                  service_data:
+                    entity_id:
+                      - switch.kasa_outdoor_plug_1
+                      - switch.kasa_outdoor_plug_2
+                      - switch.kasa_outdoor_plug_3
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4A1 SmartLife Switches"
+          - type: entities
+            title: SmartLife
+            entities:
+              - entity: switch.smartlife_switch_1
+                name: Switch 1
+                icon: mdi:toggle-switch
+              - entity: switch.smartlife_switch_2
+                name: Switch 2
+                icon: mdi:toggle-switch
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4F7 Outdoor Cameras"
+          - type: horizontal-stack
+            cards:
+              - type: picture-entity
+                title: Backyard
+                entity: camera.backyard
+                camera_view: live
+                show_name: true
+                show_state: false
+              - type: picture-entity
+                title: Driveway
+                entity: camera.driveway
+                camera_view: live
+                show_name: true
+                show_state: false
+
+  - title: "\U0001F50A Alexa"
+    path: alexa
+    icon: mdi:amazon-alexa
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F50A Alexa Devices"
+          - type: entities
+            title: Echo Devices
+            entities:
+              - entity: media_player.echo_dot
+                name: Echo Dot
+                icon: mdi:amazon-alexa
+              - entity: media_player.echo_show
+                name: Echo Show
+                icon: mdi:amazon-alexa
+              - entity: media_player.echo
+                name: Echo
+                icon: mdi:amazon-alexa
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F3B5 Now Playing"
+          - type: media-control
+            entity: media_player.echo_dot
+          - type: media-control
+            entity: media_player.echo_show
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F50A Volume Controls"
+          - type: entities
+            entities:
+              - entity: media_player.echo_dot
+                name: Echo Dot Volume
+                secondary_info: last-updated
+              - entity: media_player.echo_show
+                name: Echo Show Volume
+              - entity: media_player.echo
+                name: Echo Volume
+
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## \U0001F4AC Voice Shortcuts"
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Good Morning
+                icon: mdi:weather-sunrise
+                tap_action:
+                  action: call-service
+                  service: notify.alexa_media_echo_dot
+                  service_data:
+                    message: Good morning! Have a great day.
+                    data:
+                      type: tts
+              - type: button
+                name: Movie Time
+                icon: mdi:movie
+                tap_action:
+                  action: call-service
+                  service: notify.alexa_media_echo_dot
+                  service_data:
+                    message: Movie time! Enjoy the show.
+                    data:
+                      type: tts
+              - type: button
+                name: Good Night
+                icon: mdi:weather-night
+                tap_action:
+                  action: call-service
+                  service: notify.alexa_media_echo_dot
+                  service_data:
+                    message: Good night! Sleep well.
+                    data:
+                      type: tts
+
   - title: Home Lab
     path: homelab
     icon: mdi:server
@@ -83,7 +515,7 @@ views:
       - type: vertical-stack
         cards:
           - type: markdown
-            content: "## 🌡️ Climate"
+            content: "## \U0001F321️ Climate"
           - type: horizontal-stack
             cards:
               - type: thermostat
@@ -100,7 +532,7 @@ views:
       - type: vertical-stack
         cards:
           - type: markdown
-            content: "## 📷 All Cameras"
+            content: "## \U0001F4F7 All Cameras"
           - type: picture-glance
             title: Driveway Camera
             entity: camera.driveway
@@ -131,7 +563,7 @@ views:
       - type: vertical-stack
         cards:
           - type: markdown
-            content: "## 🖥️ System Health"
+            content: "## \U0001F5A5️ System Health"
           - type: horizontal-stack
             cards:
               - type: gauge
@@ -208,7 +640,6 @@ views:
                 camera_view: live
                 entities: []
 
-
           - type: markdown
             content: >
               {% set c = states('sensor.doorbell_last_classification') %}
@@ -278,5 +709,5 @@ views:
 
           - type: iframe
             url: http://192.168.1.227:3001
-            aspect_ratio: 100%
+            aspect_ratio: 150%
             title: Full Finance Dashboard

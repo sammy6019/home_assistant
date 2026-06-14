@@ -131,25 +131,45 @@ def ha_call(service_domain, service, data):
         return False
 
 
-def trigger_response(classification: str, capture_path: str):
+NIGHT_START_HOUR = 21  # 9 PM
+NIGHT_END_HOUR = 6     # 6 AM
+
+
+def is_nighttime() -> bool:
+    hour = datetime.now(CHICAGO).hour
+    return hour >= NIGHT_START_HOUR or hour < NIGHT_END_HOUR
+
+
+def trigger_response(classification: str, capture_path: str, trigger: str = 'ding'):
+    is_ding = trigger == 'ding'
+    night = is_nighttime()
+
+    # Motion during the day: save image only, no notification, no response
+    if not is_ding and not night:
+        logger.info('Motion (daytime) — image saved, no action')
+        return
+
     if classification == 'BUSINESS':
-        logger.info('BUSINESS visitor — playing TTS rejection')
-        ha_call('tts', 'speak', {
-            'entity_id': 'tts.home_assistant_cloud',
-            'media_player_entity_id': 'media_player.doorbell',
-            'message': 'Sorry, not interested in sales. Please leave.',
-        })
+        if is_ding:
+            logger.info('BUSINESS visitor — playing TTS rejection')
+            ha_call('tts', 'speak', {
+                'entity_id': 'tts.home_assistant_cloud',
+                'media_player_entity_id': 'media_player.doorbell',
+                'message': 'Sorry, not interested in sales. Please leave.',
+            })
 
     elif classification == 'HALLOWEEN_KIDS':
-        logger.info('HALLOWEEN_KIDS — playing trick-or-treat TTS')
-        ha_call('tts', 'speak', {
-            'entity_id': 'tts.home_assistant_cloud',
-            'media_player_entity_id': 'media_player.doorbell',
-            'message': 'Nice costume! Enjoy trick-or-treating!',
-        })
+        if is_ding:
+            logger.info('HALLOWEEN_KIDS — playing trick-or-treat TTS')
+            ha_call('tts', 'speak', {
+                'entity_id': 'tts.home_assistant_cloud',
+                'media_player_entity_id': 'media_player.doorbell',
+                'message': 'Nice costume! Enjoy trick-or-treating!',
+            })
 
     elif classification == 'ANIMAL':
-        logger.info('ANIMAL detected — playing scary sound')
+        # Scare animals at night via motion or ding
+        logger.info('ANIMAL detected at night — playing scary sound')
         ha_call('media_player', 'play_media', {
             'entity_id': 'media_player.doorbell',
             'media_content_id': 'media-source://media_source/local/scary_sound.mp3',
@@ -157,24 +177,36 @@ def trigger_response(classification: str, capture_path: str):
         })
 
     elif classification == 'VISITOR':
-        logger.info('VISITOR — sending silent phone notification with image')
-        # Encode capture as base64 for notification (HA mobile app supports image URLs)
-        ha_call('notify', 'mobile_app_iphone', {
-            'title': 'Doorbell',
-            'message': f'Someone at the door — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
-            'data': {
-                'push': {'sound': 'none'},
-                'image': f'/local/doorbell_last.jpg',
-            }
-        })
+        if is_ding:
+            logger.info('VISITOR ding — sending phone notification with image')
+            ha_call('notify', 'mobile_app_iphone', {
+                'title': 'Doorbell',
+                'message': f'Someone at the door — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
+                'data': {
+                    'push': {'sound': 'none'},
+                    'image': '/local/doorbell_last.jpg',
+                }
+            })
+        else:
+            # Night motion with a person: notify silently
+            logger.info('VISITOR motion (nighttime) — sending silent notification')
+            ha_call('notify', 'mobile_app_iphone', {
+                'title': 'Motion at door',
+                'message': f'Someone outside — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
+                'data': {
+                    'push': {'sound': 'none'},
+                    'image': '/local/doorbell_last.jpg',
+                }
+            })
 
-    # Fire HA event for binary_sensor / automation trigger
+    # Fire HA active flag only on dings or nighttime motion
     ha_call('input_boolean', 'turn_on', {'entity_id': 'input_boolean.doorbell_active'})
 
 
 @app.route('/doorbell', methods=['POST'])
 def doorbell_webhook():
-    logger.info('Doorbell webhook received')
+    trigger = request.form.get('trigger', 'ding')
+    logger.info(f'Doorbell webhook received (trigger={trigger})')
 
     image_bytes = None
     if 'image' in request.files:
@@ -203,16 +235,19 @@ def doorbell_webhook():
             logger.warning(f'Snapshot fetch attempt failed: {e}')
 
         if not image_bytes:
-            logger.warning('No image available from Vivint camera — notifying without classification')
-            ha_call('notify', 'mobile_app_iphone', {
-                'title': 'Doorbell',
-                'message': f'Someone at the door — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
-                'data': {
-                    'push': {'sound': 'default'},
-                    'image': '/local/doorbell_last.jpg',
-                }
-            })
-            ha_call('input_boolean', 'turn_on', {'entity_id': 'input_boolean.doorbell_active'})
+            if trigger == 'ding':
+                logger.warning('No image available — notifying without classification')
+                ha_call('notify', 'mobile_app_iphone', {
+                    'title': 'Doorbell',
+                    'message': f'Someone at the door — {datetime.now(CHICAGO).strftime("%I:%M %p")}',
+                    'data': {
+                        'push': {'sound': 'default'},
+                        'image': '/local/doorbell_last.jpg',
+                    }
+                })
+                ha_call('input_boolean', 'turn_on', {'entity_id': 'input_boolean.doorbell_active'})
+            else:
+                logger.info('No image for motion event — skipping')
             event = {
                 'timestamp': datetime.now(CHICAGO).isoformat(),
                 'capture': None,
@@ -243,9 +278,9 @@ def doorbell_webhook():
             logger.info(f'Deleted old capture: {fname}')
 
     classification = classify_visitor(image_bytes)
-    logger.info(f'Classification: {classification}')
+    logger.info(f'Classification: {classification} (trigger={trigger})')
 
-    trigger_response(classification, capture_path)
+    trigger_response(classification, capture_path, trigger)
 
     # Log event
     event = {

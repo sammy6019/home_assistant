@@ -101,7 +101,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: VivintConfigEntry) -> bo
             },
         )
 
-    async def _handle_doorbell_thumbnail(cam_device: Camera) -> None:
+    # Track recent ding events per camera device id so thumbnail handler knows trigger type
+    _recent_ding: dict[int, float] = {}
+    DING_WINDOW_SECS = 15
+
+    async def _handle_doorbell_thumbnail(cam_device: Camera, trigger: str) -> None:
         """Download Vivint doorbell thumbnail and POST to AI server."""
         import aiohttp
         from vivintpy.const import CameraAttribute
@@ -138,12 +142,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: VivintConfigEntry) -> bo
                 )
                 form = aiohttp.FormData()
                 form.add_field("image", image_bytes, content_type="image/jpeg", filename="doorbell.jpg")
+                form.add_field("trigger", trigger)
                 async with session.post(
                     "http://127.0.0.1:5001/doorbell",
                     data=form,
                     timeout=aiohttp.ClientTimeout(total=30),
                 ) as post_resp:
-                    _LOGGER.info("Doorbell AI server responded: %s", post_resp.status)
+                    _LOGGER.info("Doorbell AI server responded: %s (trigger=%s)", post_resp.status, trigger)
         except Exception as ex:
             _LOGGER.error("Doorbell thumbnail handler failed: %s", ex)
 
@@ -171,19 +176,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: VivintConfigEntry) -> bo
                     )
                 )
                 if CapabilityCategoryType.DOORBELL in device.capabilities:
+                    def _make_ding_callback(cam_device: Camera) -> Callable:
+                        @callback
+                        def _on_ding(_event_data: dict) -> None:
+                            import time
+                            _recent_ding[cam_device.id] = time.monotonic()
+                            async_on_device_event(DOORBELL_DING, cam_device)
+                        return _on_ding
+
                     entry.async_on_unload(
-                        device.on(
-                            DOORBELL_DING,
-                            lambda event: async_on_device_event(
-                                DOORBELL_DING, event["device"]
-                            ),
-                        )
+                        device.on(DOORBELL_DING, _make_ding_callback(device))
                     )
 
                     def _make_thumbnail_callback(cam_device: Camera) -> Callable:
                         @callback
                         def _on_thumbnail_ready(_event_data: dict) -> None:
-                            hass.async_create_task(_handle_doorbell_thumbnail(cam_device))
+                            import time
+                            last_ding = _recent_ding.get(cam_device.id, 0)
+                            trigger = "ding" if (time.monotonic() - last_ding) < DING_WINDOW_SECS else "motion"
+                            hass.async_create_task(_handle_doorbell_thumbnail(cam_device, trigger))
                         return _on_thumbnail_ready
 
                     entry.async_on_unload(
