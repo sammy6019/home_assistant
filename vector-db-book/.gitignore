@@ -1,0 +1,8 @@
+.env
+vector_db/config/.env
+vector_db_env/
+__pycache__/
+vector_db/data/pdfs/
+vector_db/data/cache/
+vector_db/data/logs/
+*.pyc
