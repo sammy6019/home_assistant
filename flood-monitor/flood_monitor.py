@@ -34,10 +34,10 @@ if not HA_TOKEN or not ANTHROPIC_API_KEY:
     except Exception as e:
         print(f'Warning: Failed to load .env: {e}')
 
-# Primary ditch camera (Ring) — analyzed every run
+# Primary sewer drain camera (Blink) — analyzed every run
 PRIMARY_CAMERA = {
-    'entity': 'camera.garden_live_view',
-    'name': 'ditch'
+    'entity': 'camera.sewer_drain',
+    'name': 'drain'
 }
 
 # Vivint area cameras — snapshot only, captured when water above first line
@@ -129,42 +129,46 @@ def cleanup_old_snapshots():
 
 # ── Claude Vision Analysis ────────────────────────────────────────────────────
 def analyze_ditch(image_path):
-    """Analyze ditch image for water level vs fluorescent orange numbered markers."""
-    prompt = """You are a flood detection system analyzing a drainage ditch camera image.
-    This may be a nighttime or low-light image.
+    """Analyze sewer drain image for water level vs painted orange reference lines, relative to the ventilation hole."""
+    prompt = """You are a flood detection system analyzing a wide-angle exterior security camera image
+    of a sewer/drainage structure. The camera is mounted at a distance from the structure and uses a
+    fisheye lens, so the structure and its markings will occupy only a small part of the frame — surrounded
+    by grass, a wooden fence, and houses in the background. This is normal and does not mean the shot is
+    invalid. Look carefully at the concrete/metal structure in the frame for the details below, even though
+    they are small. This may be a nighttime or low-light image.
 
 WATER LEVEL MARKERS:
-- There is a stake or root with 3 fluorescent orange horizontal bands numbered 1, 2, 3 bottom to top
-- There is a corrugated drainage pipe at the bottom right
+- On the drain structure there are 3 horizontal orange painted reference lines, numbered 1, 2, 3 bottom to top
+- There is a ventilation hole above the reference lines — this is the critical point that must never flood
 
 CRITICAL RULES — READ CAREFULLY:
-- You MUST be able to clearly see the orange numbered markers to make any assessment
-- If the image is too dark to clearly see the markers, report LEVEL: none
-- Wet soil, mud, puddles on soil, and damp ground are NOT flooding — ignore these completely
+- You MUST be able to clearly see at least reference line 1 to make any assessment
+- If the image is too dark to clearly see the reference line(s), report LEVEL: none
+- Wet concrete/soil, damp walls, and condensation are NOT flooding — ignore these completely
 - Shadows and dark patches are NOT water
-- Reflections on leaves or vegetation are NOT water
-- Water MUST be a clearly visible body of standing liquid filling the ditch basin
+- Reflections are NOT water
+- Water MUST be a clearly visible body of standing liquid filling the drain basin
 - If you have ANY doubt whether water is present, report LEVEL: none
-- Only report medium/high/critical if water is UNAMBIGUOUSLY visible above the ditch floor
+- Only report medium/high/critical if water is UNAMBIGUOUSLY visible above the drain floor
 
 NIGHTTIME RULE:
-- If this is a dark or nighttime image and you cannot clearly confirm water AND see the markers,
+- If this is a dark or nighttime image and you cannot clearly confirm water AND see reference line 1,
   you MUST report LEVEL: none regardless of what you think you see
 
 FLOOD LEVELS:
-- none: markers not visible OR no water visible OR uncertain
-- low: water clearly visible but below marker 1
-- medium: water clearly at or covering marker 1
-- high: water clearly at or covering marker 2
-- critical: water clearly at marker 3 or above, or pipe fully submerged
+- none: reference line 1 not visible OR no water visible OR uncertain
+- low: water clearly visible but below reference line 1
+- medium: water clearly at or covering reference line 1
+- high: water clearly at or covering reference line 2, or approaching the ventilation hole
+- critical: water clearly at reference line 3 or above, or the ventilation hole is submerged
 
 ANSWER FORMAT:
 Start with: LEVEL: (none/low/medium/high/critical)
-1. Can you clearly see the fluorescent orange numbered markers? yes or no
+1. Can you clearly see reference line 1? yes or no
 2. Is the image dark or nighttime? yes or no
-3. Is there UNAMBIGUOUS standing water filling the ditch? yes or no
-4. If yes, which marker is water at or above?
-5. Is the drainage pipe submerged? yes or no"""
+3. Is there UNAMBIGUOUS standing water filling the drain? yes or no
+4. If yes, which reference line is water at or above?
+5. Is the ventilation hole submerged or nearly submerged? yes or no"""
 
     try:
         with open(image_path, 'rb') as f:
@@ -222,12 +226,12 @@ def parse_level(analysis):
     return 'unknown'
 
 def _markers_visible(lower):
-    """Return True if the model confirmed markers were visible."""
+    """Return True if the model confirmed the reference line was visible."""
     # Look for the structured answer to question 1
-    for phrase in ('markers? yes', 'numbered markers? yes', 'see the fluorescent orange numbered markers? yes'):
+    for phrase in ('reference line 1? yes', 'see reference line 1? yes'):
         if phrase in lower:
             return True
-    for phrase in ('markers? no', 'numbered markers? no', 'see the fluorescent orange numbered markers? no'):
+    for phrase in ('reference line 1? no', 'see reference line 1? no'):
         if phrase in lower:
             return False
     # Ambiguous — treat as not visible to be safe
